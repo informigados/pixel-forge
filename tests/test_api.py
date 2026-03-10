@@ -1,0 +1,372 @@
+import asyncio
+import io
+import tempfile
+from contextlib import suppress
+from pathlib import Path
+
+import pytest
+from PIL import Image
+
+
+def _make_png_bytes() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 64), color=(20, 40, 60)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _make_transparent_png_bytes() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGBA", (32, 32), color=(0, 0, 0, 0)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_process_without_files_returns_400(client):
+    response = client.post(
+        "/process",
+        data={
+            "mode": "upload",
+            "output_dir": "output/images",
+            "target_format": "webp",
+            "quality": "80",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Nenhum arquivo enviado"
+
+
+def test_system_check_returns_expected_keys(client):
+    response = client.get("/system-check")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "ffmpeg" in payload
+    assert "avif" in payload
+    assert isinstance(payload["ffmpeg"], bool)
+    assert isinstance(payload["avif"], bool)
+
+
+def test_process_invalid_mode_returns_400(client):
+    response = client.post(
+        "/process",
+        data={
+            "mode": "invalid",
+            "output_dir": "output/images",
+            "target_format": "webp",
+            "quality": "80",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Modo inválido"
+
+
+def test_image_upload_process_and_preview(client):
+    image_data = _make_png_bytes()
+    with tempfile.TemporaryDirectory() as td:
+        out_dir = str(Path(td) / "out")
+        response = client.post(
+            "/process",
+            data={
+                "mode": "upload",
+                "output_dir": out_dir,
+                "target_format": "jpg",
+                "quality": "75",
+            },
+            files={"files": ("sample.png", image_data, "image/png")},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "success"
+        assert payload["processed_count"] == 1
+        assert payload["errors"] == []
+        processed_path = payload["results"][0]["processed"]
+        assert Path(processed_path).exists()
+
+        preview_response = client.get("/preview", params={"path": processed_path})
+        assert preview_response.status_code == 200
+
+
+def test_process_video_folder_empty_is_success(client):
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "source"
+        out = Path(td) / "out"
+        src.mkdir()
+        out.mkdir()
+
+        # only image in folder; video processor should return success with zero processed videos
+        Image.new("RGB", (32, 32), color=(1, 2, 3)).save(src / "image.jpg")
+
+        response = client.post(
+            "/process-video",
+            data={
+                "mode": "folder",
+                "source_dir": str(src),
+                "output_dir": str(out),
+                "target_format": "mp4",
+                "quality": "80",
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "success"
+        assert payload["processed_count"] == 0
+        assert payload["results"] == []
+
+
+def test_preview_blocks_non_allowed_path(client, project_root):
+    readme = project_root / "README.md"
+    response = client.get("/preview", params={"path": str(readme.resolve())})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Acesso negado para este caminho"
+
+
+def test_open_location_blocks_non_allowed_path(client, project_root):
+    readme = project_root / "README.md"
+    response = client.post("/open-location", json={"path": str(readme.resolve())})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Acesso negado para este caminho"
+
+
+def test_select_folder_returns_error_details_when_dialog_fails(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.main._open_folder_dialog",
+        lambda: ("", "Seletor indisponível em ambiente sem interface gráfica"),
+    )
+
+    response = client.post("/select-folder")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["path"] == ""
+    assert "error" in payload
+    assert "indisponível" in payload["error"]
+
+
+def test_image_upload_file_count_limit_returns_413(client, monkeypatch):
+    monkeypatch.setattr("app.main.MAX_IMAGE_UPLOAD_FILES", 1)
+    payload = _make_png_bytes()
+    response = client.post(
+        "/process",
+        data={
+            "mode": "upload",
+            "output_dir": "output/images",
+            "target_format": "webp",
+            "quality": "80",
+        },
+        files=[
+            ("files", ("a.png", payload, "image/png")),
+            ("files", ("b.png", payload, "image/png")),
+        ],
+    )
+    assert response.status_code == 413
+    assert "limite de 1" in response.json()["detail"]
+
+
+def test_video_upload_file_count_limit_returns_413(client, monkeypatch):
+    monkeypatch.setattr("app.main.MAX_VIDEO_UPLOAD_FILES", 1)
+    fake_video = b"not-a-real-video"
+    response = client.post(
+        "/process-video",
+        data={
+            "mode": "upload",
+            "output_dir": "output/videos",
+            "target_format": "mp4",
+            "quality": "80",
+        },
+        files=[
+            ("files", ("a.mp4", fake_video, "video/mp4")),
+            ("files", ("b.mp4", fake_video, "video/mp4")),
+        ],
+    )
+    assert response.status_code == 413
+    assert "limite de 1" in response.json()["detail"]
+
+
+def test_process_transparent_png_to_jpg_uses_white_background(client):
+    image_data = _make_transparent_png_bytes()
+    with tempfile.TemporaryDirectory() as td:
+        out_dir = str(Path(td) / "out")
+        response = client.post(
+            "/process",
+            data={
+                "mode": "upload",
+                "output_dir": out_dir,
+                "target_format": "jpg",
+                "quality": "90",
+            },
+            files={"files": ("transparent.png", image_data, "image/png")},
+        )
+        assert response.status_code == 200
+        processed_path = Path(response.json()["results"][0]["processed"])
+        assert processed_path.exists()
+
+        with Image.open(processed_path) as out_image:
+            pixel = out_image.getpixel((0, 0))
+            assert pixel[0] >= 240
+            assert pixel[1] >= 240
+            assert pixel[2] >= 240
+
+
+def test_config_rejects_unknown_keys(client):
+    response = client.post("/config", json={"quality": 80, "unexpected": "value"})
+    assert response.status_code == 422
+
+
+def test_config_rejects_invalid_quality_type(client):
+    response = client.post("/config", json={"quality": "../../etc/passwd"})
+    assert response.status_code == 422
+
+
+def test_open_location_windows_file_uses_select_flag(client, project_root, monkeypatch):
+    target_file = project_root / "output" / "images" / "safe-test.txt"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    target_file.write_text("ok", encoding="utf-8")
+
+    popen_calls = []
+
+    class DummyProcess:
+        pass
+
+    def fake_popen(args, *unused_args, **unused_kwargs):
+        popen_calls.append(args)
+        return DummyProcess()
+
+    monkeypatch.setattr("app.main.platform.system", lambda: "Windows")
+    monkeypatch.setattr("app.main.subprocess.Popen", fake_popen)
+
+    response = client.post("/open-location", json={"path": str(target_file.resolve())})
+    assert response.status_code == 200
+    assert popen_calls
+    assert popen_calls[0][0] == "explorer"
+    assert popen_calls[0][1].startswith("/select,")
+    assert str(target_file.resolve()) in popen_calls[0][1]
+
+
+def test_websocket_endpoint_accepts_connection(client):
+    with client.websocket_connect("/ws/test-client", headers={"host": "localhost"}) as websocket:
+        websocket.send_text("ping")
+
+
+def test_websocket_receives_image_progress_for_folder_processing(client):
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "src"
+        out = Path(td) / "out"
+        src.mkdir()
+        out.mkdir()
+        (src / "progress.png").write_bytes(_make_png_bytes())
+
+        with client.websocket_connect("/ws/progress-client", headers={"host": "localhost"}) as websocket:
+            response = client.post(
+                "/process",
+                data={
+                    "mode": "folder",
+                    "source_dir": str(src),
+                    "output_dir": str(out),
+                    "target_format": "webp",
+                    "quality": "80",
+                    "client_id": "progress-client",
+                },
+            )
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["processed_count"] == 1
+
+            ws_msg = websocket.receive_json()
+            assert ws_msg["type"] == "progress"
+            assert ws_msg["category"] == "images"
+            assert ws_msg["file"] == "progress.png"
+            assert isinstance(ws_msg["percent"], int)
+
+
+def test_ensure_directory_accepts_path_instance(tmp_path):
+    from app.utils import ensure_directory
+
+    target = tmp_path / "nested" / "dir"
+    created = ensure_directory(target)
+
+    assert created.exists()
+    assert created.is_dir()
+    assert created == target.resolve()
+
+
+def test_sentinel_video_processing_works_with_three_return_values(monkeypatch, tmp_path):
+    import app.main as main_module
+
+    watch_dir = tmp_path / "watch"
+    output_dir = tmp_path / "out"
+    watch_dir.mkdir()
+    output_dir.mkdir()
+    video_file = watch_dir / "clip.mp4"
+    video_file.write_bytes(b"fake-video-bytes")
+
+    sent_messages = []
+
+    async def fake_broadcast(message):
+        sent_messages.append(message)
+
+    async def fake_process_video(*args, **kwargs):
+        out_dir = Path(args[1])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / "clip.mp4"
+        out_path.write_bytes(b"processed")
+        return True, "ok", str(out_path)
+
+    monkeypatch.setattr(main_module.manager, "broadcast", fake_broadcast)
+    monkeypatch.setattr(main_module.video_processor, "process_video", fake_process_video)
+    monkeypatch.setattr(
+        main_module,
+        "load_config",
+        lambda: {
+            "mode": "upload",
+            "output_dir": str(output_dir),
+            "source_dir": "",
+            "target_format": "mp4",
+            "quality": 80,
+            "width": None,
+            "height": None,
+            "sentinel_enabled": True,
+            "watch_folder": str(watch_dir),
+        },
+    )
+
+    main_module.SENTINEL_IN_PROGRESS.clear()
+    main_module.SENTINEL_RECENTLY_HANDLED.clear()
+
+    async def _run_once():
+        task = asyncio.create_task(main_module.sentinel_loop())
+        await asyncio.sleep(2.8)
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+    asyncio.run(_run_once())
+
+    message_types = [msg.get("type") for msg in sent_messages]
+    assert "sentinel_start" in message_types
+    assert "sentinel_complete" in message_types
+    assert "sentinel_error" not in message_types
+
+    complete_msg = next(msg for msg in sent_messages if msg.get("type") == "sentinel_complete")
+    assert "sentinel-mode" in complete_msg["original"]
+    assert "originals" in complete_msg["original"]
+    assert "sentinel-mode" in complete_msg["processed"]
+    assert "processed" in complete_msg["processed"]
+
+
+def test_process_request_mode_accepts_only_upload_or_folder():
+    from pydantic import ValidationError
+
+    from app.main import ProcessRequest
+
+    valid = ProcessRequest(
+        mode="upload",
+        output_dir="output/images",
+        target_format="webp",
+        quality=80,
+    )
+    assert valid.mode == "upload"
+
+    with pytest.raises(ValidationError):
+        ProcessRequest(
+            mode="invalid",
+            output_dir="output/images",
+            target_format="webp",
+            quality=80,
+        )

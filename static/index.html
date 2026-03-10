@@ -1,0 +1,2454 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Pixel Forge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Data URI favicon avoids external requests and works with strict CSP. -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22><path fill=%22%2310b981%22 d=%22M234.5 5.7c13.9-5 29.1-5 43.1 0l192 68.6C485 80 496 94.9 496 112v288c0 17.1-11 32-26.4 37.7l-192 68.6c-13.9 5-29.1 5-43.1 0l-192-68.6C27 432 16 417.1 16 400V112c0-17.1 11-32 26.4-37.7l192-68.6zM256 66L82.3 128 256 190l173.7-62L256 66zm32 368.6l160-57.1v-188L288 246.6v188z%22/></svg>">
+  <style>
+    /* Custom scrollbar for better look */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans selection:bg-emerald-500 selection:text-white">
+
+  <!-- Top Bar with Language Switcher -->
+  <div class="absolute top-4 right-4 z-50">
+    <div id="language-switcher" class="relative">
+      <button id="lang-toggle-btn" type="button" onclick="toggleLanguageMenu()" aria-haspopup="true" aria-expanded="false" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 transition-colors text-sm">
+        <i class="fa-solid fa-globe text-emerald-400"></i>
+        <span id="current-lang">PT-BR</span>
+        <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
+      </button>
+      <div id="lang-menu" class="absolute right-0 mt-2 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden hidden z-[70]">
+        <button type="button" onclick="setLanguage('pt')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
+            <span>Português (BR)</span>
+            <span class="text-xs text-slate-500">PT-BR</span>
+        </button>
+        <button type="button" onclick="setLanguage('pt-pt')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
+            <span>Português (PT)</span>
+            <span class="text-xs text-slate-500">PT-PT</span>
+        </button>
+        <button type="button" onclick="setLanguage('en')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
+            <span>English</span>
+            <span class="text-xs text-slate-500">EN</span>
+        </button>
+        <button type="button" onclick="setLanguage('es')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
+            <span>Español</span>
+            <span class="text-xs text-slate-500">ES</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="min-h-screen flex items-center justify-center px-4 py-12">
+    <div class="w-full max-w-4xl bg-slate-900/90 backdrop-blur-sm border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+
+      <!-- Header -->
+      <header class="p-8 pb-0 space-y-2 text-center relative">
+        <h1 class="text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent flex items-center justify-center gap-4">
+          <i class="fa-solid fa-cube text-emerald-500"></i>
+          Pixel Forge
+        </h1>
+        <div id="sentinel-badge" class="hidden absolute top-16 right-4 sm:top-8 sm:right-8 items-center gap-2 px-3 py-1 bg-emerald-900/30 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-medium animate-pulse">
+            <i class="fa-solid fa-eye"></i>
+            <span data-i18n="sentinel_active">Monitoramento Ativo</span>
+        </div>
+        <p class="text-slate-400 max-w-xl mx-auto" data-i18n="app_description">
+          Conversor e otimizador de mídia local com segurança extrema e alta performance.
+        </p>
+      </header>
+
+      <!-- Tabs Navigation -->
+      <div class="flex flex-wrap sm:flex-nowrap justify-center gap-3 sm:gap-6 mt-8 border-b border-slate-800 px-4 sm:px-8 overflow-x-auto">
+        <button type="button" onclick="switchTab('images')" id="tab-btn-images" class="pb-4 px-2 text-sm font-medium border-b-2 border-emerald-500 text-emerald-400 transition-colors shrink-0">
+          <i class="fa-solid fa-image mr-2"></i> <span data-i18n="tab_images">Imagens</span>
+        </button>
+        <button type="button" onclick="switchTab('videos')" id="tab-btn-videos" class="pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
+          <i class="fa-solid fa-video mr-2"></i> <span data-i18n="tab_videos">Vídeos</span>
+        </button>
+        <button type="button" onclick="switchTab('history')" id="tab-btn-history" class="pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
+          <i class="fa-solid fa-clock-rotate-left mr-2"></i> <span data-i18n="tab_history">Histórico</span>
+        </button>
+        <button type="button" onclick="switchTab('config')" id="tab-btn-config" class="pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
+          <i class="fa-solid fa-gear mr-2"></i> <span data-i18n="tab_config">Configurações</span>
+        </button>
+        <button type="button" onclick="switchTab('about')" id="tab-btn-about" class="pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
+          <i class="fa-solid fa-circle-info mr-2"></i> <span data-i18n="tab_about">Sobre</span>
+        </button>
+      </div>
+
+      <!-- Content Area -->
+      <div class="p-4 sm:p-8">
+
+        <!-- IMAGES TAB -->
+        <div id="tab-images" class="space-y-6">
+          <form id="process-form-images" class="space-y-6">
+            <!-- Source Selection -->
+            <section class="space-y-3">
+              <div class="flex justify-between items-center">
+                <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider" data-i18n="section_source">Origem</h2>
+                <!-- Smart Presets Dropdown (Images) -->
+                <div class="relative">
+                    <select id="image-presets" onchange="applyImagePreset(this.value)" class="pl-8 pr-8 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-800 text-slate-300 focus:outline-none focus:border-emerald-500 transition-colors appearance-none cursor-pointer hover:bg-slate-700">
+                        <option value="none" selected data-i18n="preset_none">Sem preset (Original)</option>
+                        <option value="instagram_post">Instagram Post (1080x1080)</option>
+                        <option value="instagram_story">Instagram Stories (1080x1920)</option>
+                        <option value="web_banner">Web Banner (1920px WEBP)</option>
+                        <option value="thumbnail">YouTube Thumb (1280x720)</option>
+                        <option value="print">Impressão (TIFF)</option>
+                    </select>
+                    <i class="fa-solid fa-wand-magic-sparkles absolute left-2.5 top-2 text-emerald-500 text-xs pointer-events-none"></i>
+                    <i class="fa-solid fa-chevron-down absolute right-2.5 top-2 text-slate-400 text-xs pointer-events-none"></i>
+                </div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label class="relative flex items-center justify-center gap-3 px-4 py-3 rounded-xl border border-slate-700 bg-slate-800/50 cursor-pointer hover:bg-slate-800 transition-all group">
+                  <input type="radio" name="mode_images" value="upload" class="peer sr-only" checked onchange="updateMode('images')">
+                  <i class="fa-solid fa-cloud-arrow-up text-slate-400 peer-checked:text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                  <span class="text-sm font-medium text-slate-300 peer-checked:text-white" data-i18n="mode_upload">Upload de arquivos</span>
+                  <span class="absolute inset-0 border-2 border-emerald-500 rounded-xl opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"></span>
+                </label>
+                <label class="relative flex items-center justify-center gap-3 px-4 py-3 rounded-xl border border-slate-700 bg-slate-800/50 cursor-pointer hover:bg-slate-800 transition-all group">
+                  <input type="radio" name="mode_images" value="folder" class="peer sr-only" onchange="updateMode('images')">
+                  <i class="fa-solid fa-folder-open text-slate-400 peer-checked:text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                  <span class="text-sm font-medium text-slate-300 peer-checked:text-white" data-i18n="mode_folder">Pasta local</span>
+                  <span class="absolute inset-0 border-2 border-emerald-500 rounded-xl opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"></span>
+                </label>
+              </div>
+
+                <div id="upload-source-images" class="space-y-2 mt-4 p-6 border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/30 text-center hover:border-slate-600 hover:bg-slate-800/50 transition-all duration-200"
+                     ondragover="handleDragOver(event, 'images')"
+                     ondragleave="handleDragLeave(event, 'images')"
+                     ondrop="handleDrop(event, 'images')">
+                  <i class="fa-solid fa-images text-3xl text-slate-500 mb-2 transition-transform duration-200" id="icon-upload-images"></i>
+                  <label class="block text-sm font-medium text-slate-300 cursor-pointer">
+                    <span class="hover:underline text-emerald-400 font-semibold" data-i18n="select_images">Clique para selecionar imagens</span>
+                    <span class="text-slate-500" data-i18n="or_drag">ou arraste e solte aqui</span>
+                    <input type="file" name="files" multiple accept=".jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.ico,.avif" class="hidden">
+                  </label>
+                  <p class="text-xs text-slate-500 mt-2">JPG, PNG, WEBP, AVIF, BMP, TIFF, ICO</p>
+                  <div id="file-list-images" class="text-xs text-emerald-400 mt-2 font-medium"></div>
+                </div>
+
+              <div id="folder-source-images" class="space-y-2 hidden">
+                <label class="block text-xs font-medium text-slate-400" data-i18n="folder_path">Caminho da pasta</label>
+                <div class="relative flex gap-2">
+                  <div class="relative flex-1">
+                    <i class="fa-solid fa-folder absolute left-3 top-3 text-slate-500"></i>
+                    <input type="text" name="source_dir" placeholder="C:\Users\..." class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors">
+                  </div>
+                  <button type="button" aria-label="Select folder" onclick="selectFolder(this.previousElementSibling.querySelector('input'))" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 transition-colors">
+                    <i class="fa-solid fa-ellipsis"></i>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <!-- Settings -->
+            <section class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-800">
+              <div class="space-y-4">
+                <div class="space-y-2">
+                  <label class="block text-xs font-medium text-slate-400" data-i18n="output_folder">Pasta de destino</label>
+                  <div class="relative flex gap-2">
+                    <div class="relative flex-1">
+                      <i class="fa-solid fa-hard-drive absolute left-3 top-3 text-slate-500"></i>
+                      <input type="text" name="output_dir" required value="output/images" placeholder="C:\Output" class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors">
+                    </div>
+                    <button type="button" aria-label="Select folder" onclick="selectFolder(this.previousElementSibling.querySelector('input'))" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 transition-colors">
+                      <i class="fa-solid fa-ellipsis"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <label class="block text-xs font-medium text-slate-400" data-i18n="format">Formato</label>
+                  <select name="target_format" class="w-full px-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors appearance-none">
+                    <option value="webp">WEBP (Recomendado)</option>
+                    <option value="jpg">JPG</option>
+                    <option value="png">PNG</option>
+                    <option value="avif">AVIF (Alta Eficiência)</option>
+                    <option value="bmp">BMP</option>
+                    <option value="tiff">TIFF</option>
+                    <option value="ico">ICO</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="space-y-2">
+                  <div class="flex justify-between">
+                    <label class="block text-xs font-medium text-slate-400" data-i18n="quality">Qualidade</label>
+                    <span id="quality-val-images" class="text-xs text-emerald-400 font-mono">80%</span>
+                  </div>
+                  <input type="range" name="quality" min="1" max="100" value="80" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="document.getElementById('quality-val-images').textContent = this.value + '%'">
+                </div>
+
+                <div class="flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-800/30">
+                    <input type="checkbox" name="strip_metadata" id="strip_metadata" class="w-4 h-4 rounded border-slate-600 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900 bg-slate-700" checked>
+                    <label for="strip_metadata" class="text-xs text-slate-300 select-none cursor-pointer" data-i18n="strip_metadata">Remover Metadados (Privacidade)</label>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                  <div id="dim-overlay-images" class="hidden absolute inset-0 bg-slate-900/60 z-10 rounded-lg backdrop-blur-[1px] items-center justify-center border border-slate-700/50">
+                      <span class="text-xs font-medium text-emerald-400 bg-slate-900/80 px-2 py-1 rounded border border-emerald-900/50 shadow-sm">Dimensões Originais</span>
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-xs font-medium text-slate-400" data-i18n="width">Largura (px)</label>
+                    <input type="number" name="width" id="input-width" placeholder="Auto" class="w-full px-3 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-xs font-medium text-slate-400" data-i18n="height">Altura (px)</label>
+                    <input type="number" name="height" id="input-height" placeholder="Auto" class="w-full px-3 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 mt-1">
+                    <input type="checkbox" id="keep-original-dims" onchange="toggleDimensions(this.checked)" class="w-3.5 h-3.5 rounded border-slate-600 text-emerald-500 focus:ring-emerald-500 bg-slate-700 cursor-pointer">
+                    <label for="keep-original-dims" class="text-xs text-slate-400 cursor-pointer hover:text-slate-300 transition-colors" data-i18n="keep_original_dims">Manter dimensões originais</label>
+                </div>
+              </div>
+            </section>
+
+            <!-- Actions -->
+            <div class="pt-6">
+              <button type="submit" id="submit-btn-images" class="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 transition-all hover:shadow-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-bolt"></i>
+                <span data-i18n="btn_process_images">Processar Imagens</span>
+              </button>
+            </div>
+          </form>
+
+          <!-- Image Progress Section -->
+          <div id="progress-section-images" class="hidden border-t border-slate-800 bg-slate-900/50 p-6 rounded-xl mt-6 relative">
+            <!-- Tab Specific Status & Progress -->
+            <div class="space-y-3 mb-6">
+                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="progress-bar-images" class="h-full w-0 bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                </div>
+                <div class="flex justify-between items-start">
+                    <div id="status-images" class="text-sm text-slate-400 min-h-[1.5rem] flex-1"></div>
+                    <div id="duration-images" class="text-xs text-slate-500 font-mono ml-4"></div>
+                </div>
+            </div>
+
+            <!-- Log Section with Separator -->
+            <div class="pt-4 border-t border-slate-800/50">
+                <div class="flex flex-wrap justify-between items-center gap-2 mb-4">
+                    <h3 class="text-sm font-bold text-slate-400 flex items-center gap-2">
+                        <i class="fa-solid fa-terminal text-emerald-500"></i>
+                        <span data-i18n="process_log">Log de Processamento</span>
+                    </h3>
+                    <button type="button" onclick="clearProgress('images')" class="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-red-900/30 text-xs text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800 rounded-lg transition-colors" title="Limpar Histórico">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span data-i18n="clear_history">Limpar</span>
+                    </button>
+                </div>
+                <div class="progress-bars space-y-3 mb-4 max-h-40 overflow-y-auto pr-2"></div>
+                <div class="console-log h-32 bg-slate-950 rounded-lg border border-slate-800 p-3 font-mono text-xs text-slate-400 overflow-y-auto whitespace-pre-wrap"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIDEOS TAB -->
+        <div id="tab-videos" class="hidden">
+          <div id="ffmpeg-warning" class="hidden p-4 mb-4 text-sm text-yellow-200 bg-yellow-900/30 border border-yellow-700 rounded-lg" role="alert">
+            <i class="fa-solid fa-triangle-exclamation mr-2"></i>
+            <span data-i18n="ffmpeg_missing">FFmpeg não detectado. A conversão de vídeos pode não funcionar.</span>
+          </div>
+          <form id="process-form-videos" class="space-y-6">
+            <!-- Source Selection -->
+            <section class="space-y-3">
+              <div class="flex justify-between items-center">
+                <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider" data-i18n="section_source">Origem</h2>
+                <!-- Smart Presets Dropdown -->
+                <div class="relative">
+                    <select id="video-presets" onchange="applyPreset(this.value)" class="pl-8 pr-8 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-800 text-slate-300 focus:outline-none focus:border-emerald-500 transition-colors appearance-none cursor-pointer hover:bg-slate-700">
+                        <option value="none" selected data-i18n="preset_none">Sem preset (Original)</option>
+                        <option value="instagram_story">Instagram Stories (1080x1920)</option>
+                        <option value="youtube_4k">YouTube 4K (H.265)</option>
+                        <option value="whatsapp">WhatsApp (720p Otimizado)</option>
+                        <option value="email">Email (480p Leve)</option>
+                        <option value="archive">Arquivo (Original, H.265)</option>
+                    </select>
+                    <i class="fa-solid fa-wand-magic-sparkles absolute left-2.5 top-2 text-emerald-500 text-xs pointer-events-none"></i>
+                    <i class="fa-solid fa-chevron-down absolute right-2.5 top-2 text-slate-400 text-xs pointer-events-none"></i>
+                </div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label class="relative flex items-center justify-center gap-3 px-4 py-3 rounded-xl border border-slate-700 bg-slate-800/50 cursor-pointer hover:bg-slate-800 transition-all group">
+                  <input type="radio" name="mode_videos" value="upload" class="peer sr-only" checked onchange="updateMode('videos')">
+                  <i class="fa-solid fa-cloud-arrow-up text-slate-400 peer-checked:text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                  <span class="text-sm font-medium text-slate-300 peer-checked:text-white" data-i18n="mode_upload">Upload de arquivos</span>
+                  <span class="absolute inset-0 border-2 border-emerald-500 rounded-xl opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"></span>
+                </label>
+                <label class="relative flex items-center justify-center gap-3 px-4 py-3 rounded-xl border border-slate-700 bg-slate-800/50 cursor-pointer hover:bg-slate-800 transition-all group">
+                  <input type="radio" name="mode_videos" value="folder" class="peer sr-only" onchange="updateMode('videos')">
+                  <i class="fa-solid fa-folder-open text-slate-400 peer-checked:text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                  <span class="text-sm font-medium text-slate-300 peer-checked:text-white" data-i18n="mode_folder">Pasta local</span>
+                  <span class="absolute inset-0 border-2 border-emerald-500 rounded-xl opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"></span>
+                </label>
+              </div>
+
+              <div id="upload-source-videos" class="space-y-2 mt-4 p-6 border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/30 text-center hover:border-slate-600 hover:bg-slate-800/50 transition-all duration-200"
+                   ondragover="handleDragOver(event, 'videos')"
+                   ondragleave="handleDragLeave(event, 'videos')"
+                   ondrop="handleDrop(event, 'videos')">
+                <i class="fa-solid fa-film text-3xl text-slate-500 mb-2 transition-transform duration-200" id="icon-upload-videos"></i>
+                <label class="block text-sm font-medium text-slate-300 cursor-pointer">
+                  <span class="hover:underline text-emerald-400 font-semibold" data-i18n="select_videos">Clique para selecionar vídeos</span>
+                  <span class="text-slate-500" data-i18n="or_drag">ou arraste e solte aqui</span>
+                  <input type="file" name="files" multiple accept=".mp4,.mkv,.avi,.mov,.webm,.flv,.wmv" class="hidden">
+                </label>
+                <p class="text-xs text-slate-500 mt-2">MP4, MKV, AVI, MOV, WEBM, WMV, FLV</p>
+                <div id="file-list-videos" class="text-xs text-emerald-400 mt-2 font-medium"></div>
+              </div>
+
+              <div id="folder-source-videos" class="space-y-2 hidden">
+                <label class="block text-xs font-medium text-slate-400" data-i18n="folder_path">Caminho da pasta</label>
+                <div class="relative flex gap-2">
+                  <div class="relative flex-1">
+                    <i class="fa-solid fa-folder absolute left-3 top-3 text-slate-500"></i>
+                    <input type="text" name="source_dir" placeholder="C:\Users\..." class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors">
+                  </div>
+                  <button type="button" aria-label="Select folder" onclick="selectFolder(this.previousElementSibling.querySelector('input'))" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 transition-colors">
+                    <i class="fa-solid fa-ellipsis"></i>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <!-- Settings -->
+            <section class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-800">
+              <div class="space-y-4">
+                <div class="space-y-2">
+                  <label class="block text-xs font-medium text-slate-400" data-i18n="output_folder">Pasta de destino</label>
+                  <div class="relative flex gap-2">
+                    <div class="relative flex-1">
+                      <i class="fa-solid fa-hard-drive absolute left-3 top-3 text-slate-500"></i>
+                      <input type="text" name="output_dir" required value="output/videos" placeholder="C:\Output" class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors">
+                    </div>
+                    <button type="button" aria-label="Select folder" onclick="selectFolder(this.previousElementSibling.querySelector('input'))" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 transition-colors">
+                      <i class="fa-solid fa-ellipsis"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <label class="block text-xs font-medium text-slate-400" data-i18n="format">Formato</label>
+                  <select name="target_format" class="w-full px-4 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors appearance-none">
+                    <option value="mp4">MP4 (H.264/AAC)</option>
+                    <option value="mp4_hevc">MP4 (H.265/HEVC) - Alta Eficiência</option>
+                    <option value="mkv">MKV</option>
+                    <option value="webm">WEBM (VP9)</option>
+                    <option value="avi">AVI</option>
+                    <option value="mov">MOV</option>
+                    <option value="wmv">WMV</option>
+                    <option value="flv">FLV</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="space-y-2">
+                  <div class="flex justify-between">
+                    <label class="block text-xs font-medium text-slate-400" data-i18n="quality">Qualidade</label>
+                    <span id="quality-val-videos" class="text-xs text-emerald-400 font-mono">80%</span>
+                  </div>
+                  <input type="range" name="quality" min="1" max="100" value="80" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="document.getElementById('quality-val-videos').textContent = this.value + '%'">
+                </div>
+
+                <div class="flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-800/30">
+                    <input type="checkbox" name="remove_audio" id="remove_audio" class="w-4 h-4 rounded border-slate-600 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900 bg-slate-700">
+                    <label for="remove_audio" class="text-xs text-slate-300 select-none cursor-pointer" data-i18n="remove_audio">Remover Áudio</label>
+                </div>
+
+                <div class="flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-800/30">
+                    <input type="checkbox" name="strip_metadata" id="strip_metadata_videos" class="w-4 h-4 rounded border-slate-600 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900 bg-slate-700">
+                    <label for="strip_metadata_videos" class="text-xs text-slate-300 select-none cursor-pointer" data-i18n="remove_metadata">Remover Metadados (Privacidade)</label>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                  <!-- Overlay for disabled state -->
+                  <div id="dim-overlay-videos" class="hidden absolute inset-0 bg-slate-900/60 z-10 rounded-lg backdrop-blur-[1px] items-center justify-center border border-slate-700/50">
+                      <span class="text-xs font-medium text-emerald-400 bg-slate-900/80 px-2 py-1 rounded border border-emerald-900/50 shadow-sm">Dimensões Originais</span>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="block text-xs font-medium text-slate-400" data-i18n="width">Largura (px)</label>
+                    <input type="number" name="width" id="width_videos" placeholder="Auto" class="w-full px-3 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors">
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-xs font-medium text-slate-400" data-i18n="height">Altura (px)</label>
+                    <input type="number" name="height" id="height_videos" placeholder="Auto" class="w-full px-3 py-2.5 rounded-lg border border-slate-700 bg-slate-900 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors">
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="keep_original_dims_videos" class="w-4 h-4 rounded border-slate-600 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900 bg-slate-700" onchange="toggleDimensions('videos', this.checked)">
+                    <label for="keep_original_dims_videos" class="text-xs text-slate-300 select-none cursor-pointer">Manter dimensões originais</label>
+                </div>
+              </div>
+            </section>
+
+            <!-- Actions -->
+            <div class="pt-6">
+              <button type="submit" id="submit-btn-videos" class="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 transition-all hover:shadow-emerald-900/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-bolt"></i>
+                <span data-i18n="btn_process_videos">Processar Vídeos</span>
+              </button>
+            </div>
+          </form>
+
+          <!-- Video Progress Section -->
+          <div id="progress-section-videos" class="hidden border-t border-slate-800 bg-slate-900/50 p-6 rounded-xl mt-6 relative">
+            <!-- Tab Specific Status & Progress -->
+            <div class="space-y-3 mb-6">
+                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="progress-bar-videos" class="h-full w-0 bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                </div>
+                <div class="flex justify-between items-start">
+                    <div id="status-videos" class="text-sm text-slate-400 min-h-[1.5rem] flex-1"></div>
+                    <div id="duration-videos" class="text-xs text-slate-500 font-mono ml-4"></div>
+                </div>
+            </div>
+
+            <!-- Log Section with Separator -->
+            <div class="pt-4 border-t border-slate-800/50">
+                <div class="flex flex-wrap justify-between items-center gap-2 mb-4">
+                    <h3 class="text-sm font-bold text-slate-400 flex items-center gap-2">
+                        <i class="fa-solid fa-terminal text-emerald-500"></i>
+                        <span data-i18n="process_log">Log de Processamento</span>
+                    </h3>
+                    <button type="button" onclick="clearProgress('videos')" class="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-red-900/30 text-xs text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800 rounded-lg transition-colors" title="Limpar Histórico">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span data-i18n="clear_history">Limpar</span>
+                    </button>
+                </div>
+                <div class="progress-bars space-y-3 mb-4 max-h-40 overflow-y-auto pr-2"></div>
+                <div class="console-log h-32 bg-slate-950 rounded-lg border border-slate-800 p-3 font-mono text-xs text-slate-400 overflow-y-auto whitespace-pre-wrap"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HISTORY TAB -->
+        <div id="tab-history" class="space-y-6 hidden">
+             <div class="flex flex-wrap justify-between items-center gap-2 mb-4">
+                <h3 class="text-lg font-medium text-white" data-i18n="history_title">Histórico da Sessão</h3>
+                <button type="button" onclick="clearHistory()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-red-900/30 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800 rounded-lg transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-trash"></i> <span data-i18n="clear_history">Limpar</span>
+                </button>
+             </div>
+
+             <div id="history-list" class="space-y-2 max-h-[50vh] overflow-y-auto pr-2">
+                <!-- History items will be inserted here -->
+                <div class="text-center py-10 text-slate-500 italic" id="empty-history">
+                    <i class="fa-solid fa-clock-rotate-left text-3xl mb-3 opacity-20 block"></i>
+                    <span data-i18n="no_history">Nenhum item processado nesta sessão.</span>
+                </div>
+             </div>
+        </div>
+
+        <!-- CONFIG TAB -->
+        <div id="tab-config" class="space-y-6 hidden">
+            <h3 class="text-lg font-medium text-white mb-2" data-i18n="config_title">Preferências Globais</h3>
+            <p class="text-sm text-slate-400 mb-6" data-i18n="config_desc">Configurações persistentes da aplicação.</p>
+
+            <div id="config-form" class="space-y-4">
+                <!-- Sentinel Mode -->
+                <div class="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                    <div class="mb-4 p-3 rounded-lg border border-emerald-500/25 bg-emerald-950/20">
+                        <p class="text-xs font-semibold text-emerald-300 mb-1" data-i18n="sentinel_legend_title">Como funciona o Modo Sentinela?</p>
+                        <p class="text-xs text-slate-300 leading-relaxed" data-i18n="sentinel_legend_desc">Quando ativado, os arquivos monitorados são organizados em output/sentinel-mode: originais em originals, convertidos em processed e falhas em errors.</p>
+                    </div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h4 class="text-sm font-medium text-white flex items-center gap-2">
+                                <i class="fa-solid fa-eye text-emerald-500"></i>
+                                <span data-i18n="sentinel_mode">Modo Sentinela</span>
+                            </h4>
+                            <p class="text-xs text-slate-500 mt-1" data-i18n="sentinel_desc">Monitoramento automático.</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="sentinel_enabled" id="config-sentinel-enabled" class="sr-only peer" onchange="toggleSentinel(this.checked)">
+                            <span class="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></span>
+                        </label>
+                    </div>
+
+                    <div id="sentinel-settings" class="transition-opacity duration-200 opacity-50 pointer-events-none">
+                        <label class="block text-xs font-medium text-slate-400 mb-1" data-i18n="watch_folder">Pasta Monitorada</label>
+                        <div class="flex gap-2">
+                            <input type="text" name="watch_folder" id="config-watch-folder" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:border-emerald-500 focus:outline-none" placeholder="C:\...">
+                            <button type="button" onclick="selectFolder(document.getElementById('config-watch-folder'))" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors border border-slate-600 shadow-sm" data-i18n="select_folder_btn">
+                                Selecionar
+                            </button>
+                        </div>
+                        <div class="mt-4 flex justify-end">
+                             <button type="button" onclick="saveGlobalConfig()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition-colors shadow-lg shadow-emerald-900/20">
+                                <i class="fa-solid fa-save mr-1"></i> <span data-i18n="save_activate">Salvar &amp; Ativar</span>
+                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Support Section -->
+                <div class="pt-6 border-t border-slate-800">
+                    <h4 class="text-sm font-medium text-white flex items-center gap-2 mb-4">
+                        <i class="fa-solid fa-headset text-emerald-500"></i>
+                        <span data-i18n="support_title">Suporte</span>
+                    </h4>
+
+                    <div class="p-4 bg-slate-900/50 rounded-lg border border-slate-700 flex items-center justify-between gap-4">
+                        <div>
+                            <p class="text-sm text-slate-300 font-medium" data-i18n="report_bug_title">Encontrou um problema?</p>
+                            <p class="text-xs text-slate-500 mt-1" data-i18n="report_bug_desc">Relate erros ou envie sugestões diretamente para nossa equipe.</p>
+                        </div>
+                        <a href="mailto:contato@informigados.com.br?subject=Pixel%20Forge%20-%20Reportar%20Erro" class="shrink-0 px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 hover:border-rose-500/40 rounded-lg text-xs font-medium transition-all flex items-center gap-2">
+                            <i class="fa-solid fa-bug"></i>
+                            <span data-i18n="btn_report_bug">Reportar Erro</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABOUT TAB -->
+        <div id="tab-about" class="hidden animate-fade-in space-y-6">
+            <!-- About Header -->
+            <div class="bg-slate-800/50 backdrop-blur rounded-2xl p-6 border border-slate-700/50 shadow-xl">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-circle-info text-2xl text-emerald-500"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Sobre o Pixel Forge</h2>
+                        <p class="text-slate-400 text-sm">Versão 1.0.0</p>
+                    </div>
+                </div>
+                <p class="text-slate-300 leading-relaxed mb-4">
+                    O Pixel Forge é uma ferramenta poderosa e intuitiva para otimização e conversão de mídia local.
+                    Desenvolvido para profissionais que buscam eficiência, o sistema oferece processamento seguro,
+                    presets inteligentes e feedback em tempo real.
+                </p>
+            </div>
+
+            <!-- Features -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-slate-800/30 rounded-xl p-5 border border-slate-700/30">
+                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Presets Inteligentes</h3>
+                    <p class="text-slate-400 text-xs">Configurações otimizadas para redes sociais e web.</p>
+                </div>
+                <div class="bg-slate-800/30 rounded-xl p-5 border border-slate-700/30">
+                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-eye mr-2"></i>Modo Sentinela</h3>
+                    <p class="text-slate-400 text-xs">Monitoramento automático de pastas para conversão instantânea.</p>
+                </div>
+                <div class="bg-slate-800/30 rounded-xl p-5 border border-slate-700/30">
+                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-bolt mr-2"></i>Alta Performance</h3>
+                    <p class="text-slate-400 text-xs">Processamento multithread local com FFmpeg e Pillow.</p>
+                </div>
+                <div class="bg-slate-800/30 rounded-xl p-5 border border-slate-700/30">
+                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-shield-halved mr-2"></i>Privacidade</h3>
+                    <p class="text-slate-400 text-xs">Seus arquivos nunca saem do seu computador.</p>
+                </div>
+            </div>
+
+            <!-- Credits -->
+            <div class="bg-slate-800/30 rounded-xl p-6 border border-slate-700/30">
+                <h3 class="text-white font-semibold mb-4 text-sm">Tecnologias &amp; Créditos</h3>
+                <div class="flex flex-wrap gap-2 mb-6">
+                    <span class="px-2 py-1 bg-slate-700/50 rounded text-[10px] text-slate-300 border border-slate-600/50">FastAPI</span>
+                    <span class="px-2 py-1 bg-slate-700/50 rounded text-[10px] text-slate-300 border border-slate-600/50">Python</span>
+                    <span class="px-2 py-1 bg-slate-700/50 rounded text-[10px] text-slate-300 border border-slate-600/50">FFmpeg</span>
+                    <span class="px-2 py-1 bg-slate-700/50 rounded text-[10px] text-slate-300 border border-slate-600/50">TailwindCSS</span>
+                </div>
+
+                <div class="pt-4 border-t border-slate-700/50 space-y-4">
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                        <p class="text-slate-500 text-xs">Desenvolvido com ❤️ pela equipe INformigados</p>
+                        <a href="https://github.com/informigados/pixel-forge/" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-xs font-medium">
+                            <i class="fa-brands fa-github"></i>
+                            Acessar Repositório
+                        </a>
+                    </div>
+
+                    <!-- Authors -->
+                    <h4 class="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-3 mt-4">Autores</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="flex items-center gap-3 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50 hover:bg-slate-800/80 transition-colors">
+                            <img src="images/authors/informigados.webp" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTAxODIxIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwIDIxdi0yYTQgNCAwIDAgMC00LTRINGE0IDQgMCAwIDAtNCA0djIiPjwvcGF0aD48Y2lyY2xlIGN4PSIxMiIgY3k9IjciIHI9IjQiPjwvY2lyY2xlPjwvc3ZnPg=='" class="w-10 h-10 rounded-full object-cover border border-emerald-500/30 bg-emerald-900/20" alt="INformigados">
+                            <div>
+                                <h4 class="text-white text-xs font-bold">INformigados</h4>
+                                <a href="https://github.com/informigados/" target="_blank" rel="noopener noreferrer" class="text-emerald-500 text-[10px] hover:underline">github.com/informigados</a>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50 hover:bg-slate-800/80 transition-colors">
+                            <img src="images/authors/alex-brito-dev.webp" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTAxODIxIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwIDIxdi0yYTQgNCAwIDAgMC00LTRINGE0IDQgMCAwIDAtNCA0djIiPjwvcGF0aD48Y2lyY2xlIGN4PSIxMiIgY3k9IjciIHI9IjQiPjwvY2lyY2xlPjwvc3ZnPg=='" class="w-10 h-10 rounded-full object-cover border border-emerald-500/30 bg-emerald-900/20" alt="Alex Brito">
+                            <div>
+                                <h4 class="text-white text-xs font-bold">Alex Brito</h4>
+                                <a href="https://github.com/AlexBritoDEV" target="_blank" rel="noopener noreferrer" class="text-emerald-500 text-[10px] hover:underline">github.com/AlexBritoDEV</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Collaborators -->
+                    <h4 class="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-3 mt-6" data-i18n="collaborators_title">Colaboradores</h4>
+                    <div class="p-4 bg-slate-900/30 rounded-lg border border-slate-700/30 text-center">
+                        <i class="fa-solid fa-users-gear text-2xl text-slate-500 mb-2"></i>
+                        <p class="text-slate-400 text-xs leading-relaxed" data-i18n="collab_text">
+                            Junte-se à revolução! Estamos em busca de talentos para elevar o nível desta ferramenta. Contribua com seu código e ganhe destaque exclusivo em nossa galeria de colaboradores.
+                        </p>
+                        <a href="https://github.com/informigados/pixel-forge" target="_blank" rel="noopener noreferrer" class="inline-block mt-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] rounded border border-slate-700 transition-colors">
+                            <i class="fa-brands fa-github mr-1"></i> <span data-i18n="btn_contribute">Contribuir</span>
+                        </a>
+                    </div>
+
+                    <!-- Sponsors -->
+                    <h4 class="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-3 mt-6" data-i18n="patrons_title">Patrocinadores</h4>
+                    <div class="p-4 bg-gradient-to-br from-slate-900/50 to-emerald-900/10 rounded-lg border border-slate-700/30 text-center">
+                        <i class="fa-solid fa-heart text-2xl text-rose-500 mb-2 animate-pulse"></i>
+                        <p class="text-slate-400 text-xs leading-relaxed" data-i18n="patrons_text">
+                            Seja um pilar da nossa comunidade! Seu patrocínio é o combustível que mantém esta e outras ferramentas inovadoras vivas e gratuitas para todos.
+                        </p>
+                        <a href="https://informigados.com.br" target="_blank" rel="noopener noreferrer" class="inline-block mt-3 px-3 py-1.5 bg-emerald-900/20 hover:bg-emerald-900/40 text-emerald-400 text-[10px] rounded border border-emerald-500/30 transition-colors">
+                            <i class="fa-solid fa-hand-holding-dollar mr-1"></i> <span data-i18n="btn_support">Apoiar Projeto</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status & Progress (Moved to Tabs) -->
+        <div class="mt-8"></div>
+
+      </div>
+
+
+
+      <footer class="bg-slate-900 border-t border-slate-800 px-8 py-6 flex flex-col md:flex-row md:flex-wrap lg:flex-nowrap items-center justify-between text-xs text-slate-500 gap-4">
+        <span id="copyright">&copy; Pixel Forge</span>
+
+        <span class="text-slate-400">
+            Projetado por <a href="https://informigados.com.br" target="_blank" rel="noopener noreferrer" class="text-emerald-500 hover:text-emerald-400 hover:underline transition-colors font-medium">INformigados</a>
+        </span>
+
+        <span class="flex items-center gap-2">
+            <i class="fa-solid fa-shield-halved text-emerald-500"></i>
+            <span data-i18n="secure_environment">Ambiente Seguro</span>
+        </span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Comparison Modal -->
+  <div id="comparison-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh]">
+        <!-- Header -->
+        <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-code-compare text-emerald-500"></i>
+                <span data-i18n="comparison_title">Comparação Visual</span>
+            </h3>
+            <div class="flex items-center gap-3">
+                <!-- Mode Toggle -->
+                <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+                    <button type="button" onclick="toggleComparisonMode(1)" id="btn-mode-1" class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-emerald-600 text-white shadow-sm" title="Modo Deslizante">
+                        <i class="fa-solid fa-arrows-left-right mr-1"></i> Slider
+                    </button>
+                    <button type="button" onclick="toggleComparisonMode(2)" id="btn-mode-2" class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-slate-400 hover:text-white" title="Modo Lado a Lado">
+                        <i class="fa-solid fa-columns mr-1"></i> Side-by-Side
+                    </button>
+                </div>
+                <button type="button" onclick="closeComparison()" aria-label="Fechar comparação" class="text-slate-400 hover:text-white transition-colors ml-2">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-hidden relative min-h-[320px] bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHUlEQVQ4jWNgYGAQAOPj4/8jA2RxbGCAk0F4wAAAMHQCCQc6yZkAAAAASUVORK5CYII=')] bg-repeat">
+            <div class="relative w-full h-full flex items-center justify-center p-4">
+
+                <!-- Mode 1: Slider -->
+                <div id="comparison-mode-1" class="relative w-full h-full max-h-[70vh] flex justify-center items-center">
+                     <!-- Container for images -->
+                     <div class="relative max-w-full max-h-full aspect-auto select-none group" id="comparison-container">
+                        <!-- Original Image (Bottom) -->
+                        <img id="img-original" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="block max-w-full max-h-[65vh] object-contain transition-all duration-300" alt="Original">
+                        <div class="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur-md border border-white/10 z-20">Original</div>
+
+                        <!-- Processed Image (Top - Clipped) -->
+                        <div id="img-processed-wrapper" class="absolute inset-0 overflow-hidden w-[50%] border-r-2 border-emerald-500 bg-white/5 shadow-[0_0_20px_rgba(16,185,129,0.5)] z-10">
+                            <img id="img-processed" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="block w-full h-full object-contain object-left" alt="Processed">
+                            <div class="absolute top-2 right-2 bg-emerald-600/90 text-white text-xs px-2 py-1 rounded backdrop-blur-md shadow-lg">Otimizado</div>
+                        </div>
+
+                        <!-- Slider Handle -->
+                        <div class="absolute inset-0 flex items-center w-full h-full pointer-events-none z-30">
+                             <div id="slider-handle" class="h-full w-0.5 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] relative left-[50%]">
+                                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg cursor-grab pointer-events-auto hover:scale-110 transition-transform">
+                                    <i class="fa-solid fa-arrows-left-right text-white text-xs"></i>
+                                </div>
+                             </div>
+                        </div>
+
+                        <!-- Invisible Range Input for Interaction -->
+                        <input type="range" min="0" max="100" value="50" class="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-40" oninput="updateComparison(this.value)">
+                     </div>
+                </div>
+
+                <!-- Mode 2: Side by Side -->
+                <div id="comparison-mode-2" class="hidden w-full min-h-[300px] md:min-h-[420px] gap-4">
+                    <!-- Original -->
+                    <div class="relative h-full flex flex-col items-center justify-center bg-black/20 rounded-lg overflow-hidden border border-slate-700/50">
+                        <div class="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur-md border border-white/10 z-10">Original</div>
+                        <img id="img-original-2" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="max-w-full max-h-full object-contain" alt="Original">
+                    </div>
+                    <!-- Processed -->
+                    <div class="relative h-full flex flex-col items-center justify-center bg-black/20 rounded-lg overflow-hidden border border-emerald-900/30">
+                        <div class="absolute top-2 right-2 bg-emerald-600/90 text-white text-xs px-2 py-1 rounded backdrop-blur-md shadow-lg z-10">Otimizado</div>
+                        <img id="img-processed-2" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="max-w-full max-h-full object-contain" alt="Processed">
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-4 border-t border-slate-800 bg-slate-900 flex justify-between items-center text-xs text-slate-400">
+            <div>
+                <span class="block text-slate-500" id="comparison-hint">Arraste para comparar</span>
+            </div>
+            <div class="flex gap-4">
+                <div class="text-center">
+                    <span class="block text-slate-500">Tamanho Original</span>
+                    <span id="size-original" class="text-white font-mono">-</span>
+                </div>
+                <div class="text-center">
+                    <span class="block text-slate-500">Tamanho Otimizado</span>
+                    <span id="size-processed" class="text-emerald-400 font-mono">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+  </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    // --- Toast Notification System ---
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        const toast = document.createElement('div');
+        toast.className = `pointer-events-auto min-w-[300px] p-4 rounded-lg shadow-lg border-l-4 transform transition-all duration-300 translate-x-full opacity-0 flex items-center justify-between gap-3 ${
+            type === 'success' ? 'bg-slate-800 border-emerald-500 text-white' :
+            type === 'error' ? 'bg-slate-800 border-red-500 text-white' :
+            type === 'processing' ? 'bg-slate-800 border-blue-500 text-white' :
+            'bg-slate-800 border-slate-500 text-white'
+        }`;
+
+        const content = document.createElement('div');
+        content.className = 'flex items-center gap-3';
+
+        const icon = document.createElement('i');
+        if (type === 'success') {
+            icon.className = 'fa-solid fa-circle-check text-emerald-500';
+        } else if (type === 'error') {
+            icon.className = 'fa-solid fa-circle-exclamation text-red-500';
+        } else if (type === 'processing') {
+            icon.className = 'fa-solid fa-spinner fa-spin text-blue-500';
+        } else {
+            icon.className = 'fa-solid fa-circle-info text-slate-400';
+        }
+
+        const text = document.createElement('span');
+        text.className = 'text-sm font-medium';
+        text.textContent = String(message || '');
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'text-slate-400 hover:text-white transition-colors';
+        closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+        closeBtn.addEventListener('click', () => toast.remove());
+
+        content.appendChild(icon);
+        content.appendChild(text);
+        toast.appendChild(content);
+        toast.appendChild(closeBtn);
+        container.appendChild(toast);
+
+        requestAnimationFrame(() => {
+            toast.classList.remove('translate-x-full', 'opacity-0');
+        });
+
+        if (type !== 'processing') {
+            setTimeout(() => {
+                toast.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        return toast;
+    }
+  </script>
+
+    <!-- Custom Modal -->
+    <div id="custom-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity opacity-0" id="modal-backdrop"></div>
+
+        <!-- Modal Content -->
+        <div class="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 overflow-hidden transform transition-all scale-95 opacity-0" id="modal-content">
+            <!-- Decorative gradient -->
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500" id="modal-accent"></div>
+
+            <div class="flex flex-col items-center text-center space-y-4">
+                <!-- Icon Wrapper -->
+                <div id="modal-icon-wrapper" class="w-16 h-16 rounded-full flex items-center justify-center bg-slate-800 border border-slate-700 shadow-inner">
+                    <i id="modal-icon" class="text-3xl text-emerald-500 fa-solid fa-check"></i>
+                </div>
+
+                <h3 id="modal-title" class="text-xl font-bold text-white">Título</h3>
+                <p id="modal-message" class="text-slate-400 text-sm leading-relaxed">Mensagem aqui...</p>
+
+                <!-- Buttons -->
+                <div id="modal-buttons" class="flex gap-3 w-full pt-4">
+                    <button type="button" id="modal-btn-cancel" class="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors border border-slate-700">
+                        Cancelar
+                    </button>
+                    <button type="button" id="modal-btn-confirm" class="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-emerald-900/20">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const translations = {
+      pt: {
+        app_description: "Conversor e otimizador de mídia local com segurança extrema e alta performance.",
+        tab_images: "Imagens",
+        tab_videos: "Vídeos",
+        tab_history: "Histórico",
+        tab_config: "Configurações",
+        tab_about: "Sobre",
+        history_title: "Histórico da Sessão",
+        clear_history: "Limpar",
+        no_history: "Nenhum item processado nesta sessão.",
+        confirm_clear: "Limpar histórico?",
+        section_source: "Origem",
+        mode_upload: "Upload de arquivos",
+        mode_folder: "Pasta local",
+        select_images: "Clique para selecionar imagens",
+        select_videos: "Clique para selecionar vídeos",
+        folder_path: "Caminho da pasta",
+        output_folder: "Pasta de destino",
+        select_folder_btn: "Selecionar",
+        format: "Formato",
+        quality: "Qualidade",
+        width: "Largura (px)",
+        height: "Altura (px)",
+        btn_process_images: "Processar Imagens",
+        btn_process_videos: "Processar Vídeos",
+        config_title: "Preferências Globais",
+        config_desc: "Configurações persistentes da aplicação.",
+        secure_environment: "Ambiente Seguro",
+        status_processing: "Processando...",
+        processing: "Processando",
+        status_success: "Concluído com sucesso!",
+        status_error: "Ocorreu um erro.",
+        status_comm_error: "Erro de comunicação com o servidor.",
+        ffmpeg_missing: "FFmpeg não detectado. A conversão de vídeos não funcionará sem ele.",
+        or_drag: "ou arraste e solte aqui",
+        strip_metadata: "Remover Metadados (Privacidade)",
+        remove_metadata: "Remover Metadados",
+        remove_audio: "Remover Áudio",
+        keep_original_dims: "Manter dimensões originais",
+        preset_none: "Sem preset (Original)",
+        process_log: "Log de Processamento",
+        comparison_title: "Comparação Antes e Depois",
+        sentinel_mode: "Modo Sentinela (Monitoramento de Pasta)",
+        sentinel_desc: "Monitore uma pasta para processamento automático.",
+        sentinel_legend_title: "Como funciona o Modo Sentinela?",
+        sentinel_legend_desc: "Quando ativado, os arquivos monitorados sao organizados em output/sentinel-mode: originais em originals, convertidos em processed e falhas em errors.",
+        watch_folder: "Pasta Monitorada",
+        sentinel_active: "Monitoramento Ativo",
+        save_activate: "Salvar & Ativar",
+        support_title: "Suporte",
+        report_bug_title: "Encontrou um problema?",
+        report_bug_desc: "Relate erros ou envie sugestões diretamente para nossa equipe.",
+        btn_report_bug: "Reportar Erro",
+        collaborators_title: "Colaboradores",
+        collab_text: "Junte-se à revolução! Estamos em busca de talentos para elevar o nível desta ferramenta. Contribua com seu código e ganhe destaque exclusivo em nossa galeria de colaboradores.",
+        btn_contribute: "Contribuir",
+        patrons_title: "Patrocinadores",
+        patrons_text: "Seja um pilar da nossa comunidade! Seu patrocínio é o combustível que mantém esta e outras ferramentas inovadoras vivas e gratuitas para todos.",
+        btn_support: "Apoiar Projeto",
+        sentinel_error: "Erro (Sentinela)",
+        files_selected_count: "{count} arquivo(s) selecionado(s)",
+        processing_finished_with_errors: "Concluído com erros ({count}).",
+        folder_dialog_unavailable: "Não foi possível abrir o seletor de pasta."
+      },
+      'pt-pt': {
+        app_description: "Conversor e otimizador de multimédia local com segurança extrema e alto desempenho.",
+        tab_images: "Imagens",
+        tab_videos: "Vídeos",
+        tab_history: "Histórico",
+        tab_config: "Configuração",
+        tab_about: "Sobre",
+        history_title: "Histórico da Sessão",
+        clear_history: "Limpar",
+        no_history: "Nenhum item processado nesta sessão.",
+        confirm_clear: "Limpar histórico?",
+        section_source: "Origem",
+        mode_upload: "Carregar ficheiros",
+        mode_folder: "Pasta local",
+        select_images: "Clique para selecionar imagens",
+        select_videos: "Clique para selecionar vídeos",
+        folder_path: "Caminho da pasta",
+        output_folder: "Pasta de destino",
+        select_folder_btn: "Selecionar",
+        format: "Formato",
+        quality: "Qualidade",
+        width: "Largura (px)",
+        height: "Altura (px)",
+        btn_process_images: "Processar Imagens",
+        btn_process_videos: "Processar Vídeos",
+        config_title: "Preferências Globais",
+        config_desc: "Definições persistentes da aplicação.",
+        secure_environment: "Ambiente Seguro",
+        status_processing: "A processar...",
+        processing: "A processar",
+        status_success: "Concluído com sucesso!",
+        status_error: "Ocorreu um erro.",
+        status_comm_error: "Erro de comunicação com o servidor.",
+        ffmpeg_missing: "FFmpeg não detetado. A conversão de vídeos não funcionará sem ele.",
+        or_drag: "ou arraste e solte aqui",
+        strip_metadata: "Remover Metadados (Privacidade)",
+        remove_metadata: "Remover Metadados",
+        remove_audio: "Remover Áudio",
+        keep_original_dims: "Manter dimensões originais",
+        preset_none: "Sem preset (Original)",
+        process_log: "Registo de Processamento",
+        comparison_title: "Comparação Antes e Depois",
+        sentinel_mode: "Modo Sentinela (Monitorização de Pasta)",
+        sentinel_desc: "Monitorize uma pasta para processamento automático.",
+        sentinel_legend_title: "Como funciona o Modo Sentinela?",
+        sentinel_legend_desc: "Quando ativado, os ficheiros monitorizados sao organizados em output/sentinel-mode: originais em originals, convertidos em processed e falhas em errors.",
+        watch_folder: "Pasta Monitorizada",
+        sentinel_active: "Monitorização Ativa",
+        save_activate: "Guardar e Ativar",
+        support_title: "Suporte",
+        report_bug_title: "Encontrou um problema?",
+        report_bug_desc: "Relate erros ou envie sugestões diretamente para a nossa equipa.",
+        btn_report_bug: "Reportar Erro",
+        collaborators_title: "Colaboradores",
+        collab_text: "Junte-se à revolução! Estamos à procura de talentos para elevar o nível desta ferramenta. Contribua com o seu código e ganhe destaque exclusivo na nossa galeria de colaboradores.",
+        btn_contribute: "Contribuir",
+        patrons_title: "Patrocinadores",
+        patrons_text: "Seja um pilar da nossa comunidade! O seu patrocínio é o combustível que mantém esta e outras ferramentas inovadoras vivas e gratuitas para todos.",
+        btn_support: "Apoiar Projeto",
+        sentinel_error: "Erro (Sentinela)",
+        files_selected_count: "{count} ficheiro(s) selecionado(s)",
+        processing_finished_with_errors: "Concluído com erros ({count}).",
+        folder_dialog_unavailable: "Não foi possível abrir o seletor de pasta."
+      },
+      en: {
+        app_description: "Local media converter and optimizer with extreme security and high performance.",
+        tab_images: "Images",
+        tab_videos: "Videos",
+        tab_history: "History",
+        tab_config: "Settings",
+        tab_about: "About",
+        history_title: "Session History",
+        clear_history: "Clear",
+        no_history: "No items processed in this session.",
+        confirm_clear: "Clear history?",
+        section_source: "Source",
+        mode_upload: "File Upload",
+        mode_folder: "Local Folder",
+        select_images: "Click to select images",
+        select_videos: "Click to select videos",
+        folder_path: "Folder Path",
+        output_folder: "Destination Folder",
+        select_folder_btn: "Select",
+        format: "Format",
+        quality: "Quality",
+        width: "Width (px)",
+        height: "Height (px)",
+        btn_process_images: "Process Images",
+        btn_process_videos: "Process Videos",
+        config_title: "Global Preferences",
+        config_desc: "Persistent application settings.",
+        secure_environment: "Secure Environment",
+        status_processing: "Processing...",
+        processing: "Processing",
+        status_success: "Completed successfully!",
+        status_error: "An error occurred.",
+        status_comm_error: "Communication error with server.",
+        ffmpeg_missing: "FFmpeg not detected. Video conversion will not work without it.",
+        or_drag: "or drag and drop here",
+        strip_metadata: "Remove Metadata (Privacy)",
+        remove_metadata: "Remove Metadata",
+        remove_audio: "Remove Audio",
+        keep_original_dims: "Keep original dimensions",
+        preset_none: "No preset (Original)",
+        process_log: "Processing Log",
+        comparison_title: "Before and After Comparison",
+        sentinel_mode: "Sentinel Mode (Watch Folder)",
+        sentinel_desc: "Monitor a folder for automatic processing.",
+        sentinel_legend_title: "How does Sentinel Mode work?",
+        sentinel_legend_desc: "When enabled, monitored files are organized under output/sentinel-mode: originals in originals, converted files in processed, and failures in errors.",
+        watch_folder: "Watch Folder",
+        sentinel_active: "Monitoring Active",
+        save_activate: "Save & Activate",
+        support_title: "Support",
+        report_bug_title: "Found a bug?",
+        report_bug_desc: "Report errors or send suggestions directly to our team.",
+        btn_report_bug: "Report Bug",
+        collaborators_title: "Collaborators",
+        collab_text: "Join the revolution! We are looking for talents to elevate this tool. Contribute with your code and get exclusive recognition in our contributors gallery.",
+        btn_contribute: "Contribute",
+        patrons_title: "Sponsors",
+        patrons_text: "Be a pillar of our community! Your sponsorship is the fuel that keeps this and other innovative tools alive and free for everyone.",
+        btn_support: "Support Project",
+        sentinel_error: "Error (Sentinel)",
+        files_selected_count: "{count} file(s) selected",
+        processing_finished_with_errors: "Completed with errors ({count}).",
+        folder_dialog_unavailable: "Unable to open the folder picker."
+      },
+      es: {
+        app_description: "Convertidor y optimizador de medios local con seguridad extrema y alto rendimiento.",
+        tab_images: "Imágenes",
+        tab_videos: "Videos",
+        tab_history: "Historial",
+        tab_config: "Configuración",
+        tab_about: "Acerca de",
+        history_title: "Historial de Sesión",
+        clear_history: "Limpiar",
+        no_history: "Ningún elemento procesado en esta sesión.",
+        confirm_clear: "¿Limpiar historial?",
+        section_source: "Origen",
+        mode_upload: "Subir archivos",
+        mode_folder: "Carpeta local",
+        select_images: "Haga clic para seleccionar imágenes",
+        select_videos: "Haga clic para seleccionar videos",
+        folder_path: "Ruta de la carpeta",
+        output_folder: "Carpeta de destino",
+        select_folder_btn: "Seleccionar",
+        format: "Formato",
+        quality: "Calidad",
+        width: "Ancho (px)",
+        height: "Alto (px)",
+        btn_process_images: "Procesar Imágenes",
+        btn_process_videos: "Procesar Videos",
+        config_title: "Preferencias Globales",
+        config_desc: "Configuraciones persistentes de la aplicación.",
+        secure_environment: "Entorno Seguro",
+        status_processing: "Procesando...",
+        processing: "Procesando",
+        status_success: "¡Completado con éxito!",
+        status_error: "Ocurrió un error.",
+        status_comm_error: "Error de comunicación con el servidor.",
+        ffmpeg_missing: "FFmpeg no detectado. La conversión de video no funcionará sin él.",
+        or_drag: "o arrastre y suelte aquí",
+        strip_metadata: "Eliminar Metadatos (Privacidad)",
+        remove_metadata: "Eliminar Metadatos",
+        remove_audio: "Eliminar Audio",
+        keep_original_dims: "Mantener dimensiones originales",
+        preset_none: "Sin preset (Original)",
+        process_log: "Registro de Procesamiento",
+        comparison_title: "Comparación Antes y Después",
+        sentinel_mode: "Modo Centinela (Carpeta Vigilada)",
+        sentinel_desc: "Supervisar una carpeta para el procesamiento automático.",
+        sentinel_legend_title: "Como funciona el Modo Centinela?",
+        sentinel_legend_desc: "Cuando esta activo, los archivos monitorizados se organizan en output/sentinel-mode: originales en originals, convertidos en processed y fallos en errors.",
+        watch_folder: "Carpeta Vigilada",
+        sentinel_active: "Monitoreo Activo",
+        save_activate: "Guardar y Activar",
+        support_title: "Soporte",
+        report_bug_title: "¿Encontró un problema?",
+        report_bug_desc: "Informe errores o envíe sugerencias directamente a nuestro equipo.",
+        btn_report_bug: "Reportar Error",
+        collaborators_title: "Colaboradores",
+        collab_text: "¡Únete a la revolución! Estamos buscando talentos para elevar el nivel de esta herramienta. Contribuye con tu código y obtén reconocimiento exclusivo en nuestra galería de colaboradores.",
+        btn_contribute: "Contribuir",
+        patrons_title: "Patrocinadores",
+        patrons_text: "¡Sea un pilar de nuestra comunidad! Su patrocinio es el combustible que mantiene vivas y gratuitas esta y otras herramientas innovadoras para todos.",
+        btn_support: "Apoyar Proyecto",
+        sentinel_error: "Error (Centinela)",
+        files_selected_count: "{count} archivo(s) seleccionado(s)",
+        processing_finished_with_errors: "Completado con errores ({count}).",
+        folder_dialog_unavailable: "No se pudo abrir el selector de carpeta."
+      }
+    };
+
+    let currentLang = 'pt';
+
+    function t(key, fallback = '') {
+        return (translations[currentLang] && translations[currentLang][key]) || fallback;
+    }
+
+    function formatI18n(key, params = {}, fallback = '') {
+        let text = t(key, fallback);
+        Object.keys(params).forEach((paramKey) => {
+            text = text.replaceAll(`{${paramKey}}`, String(params[paramKey]));
+        });
+        return text;
+    }
+
+    function updateSelectedFileCountLabel(type) {
+        const fileInput = document.querySelector(`#process-form-${type} input[name="files"]`);
+        const list = document.getElementById(`file-list-${type}`);
+        if (!fileInput || !list) return;
+
+        const count = fileInput.files ? fileInput.files.length : 0;
+        list.textContent = count > 0
+            ? formatI18n('files_selected_count', { count }, `${count} file(s) selected`)
+            : '';
+    }
+
+    function refreshSelectedFileCountLabels() {
+        ['images', 'videos'].forEach(updateSelectedFileCountLabel);
+    }
+
+    class CustomModal {
+        static show(options) {
+            const modal = document.getElementById('custom-modal');
+            const content = document.getElementById('modal-content');
+            const backdrop = document.getElementById('modal-backdrop');
+            const titleEl = document.getElementById('modal-title');
+            const messageEl = document.getElementById('modal-message');
+            const iconEl = document.getElementById('modal-icon');
+            const iconWrapper = document.getElementById('modal-icon-wrapper');
+            const btnConfirm = document.getElementById('modal-btn-confirm');
+            const btnCancel = document.getElementById('modal-btn-cancel');
+            const accent = document.getElementById('modal-accent');
+
+            // Reset classes
+            modal.classList.remove('hidden');
+            // Trigger animation
+            setTimeout(() => {
+                backdrop.classList.remove('opacity-0');
+                content.classList.remove('opacity-0', 'scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+
+            titleEl.textContent = options.title || 'Aviso';
+            messageEl.textContent = options.message || '';
+
+            // Icon & Color Logic
+            iconEl.className = 'text-3xl fa-solid';
+            iconWrapper.className = 'w-16 h-16 rounded-full flex items-center justify-center border shadow-inner';
+
+            if (options.type === 'success') {
+                iconEl.classList.add('fa-check', 'text-emerald-500');
+                iconWrapper.classList.add('bg-emerald-900/20', 'border-emerald-500/30');
+                accent.className = 'absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500';
+                btnConfirm.className = 'flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-emerald-900/20';
+            } else if (options.type === 'error') {
+                iconEl.classList.add('fa-triangle-exclamation', 'text-rose-500');
+                iconWrapper.classList.add('bg-rose-900/20', 'border-rose-500/30');
+                accent.className = 'absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 to-red-500';
+                btnConfirm.className = 'flex-1 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-rose-900/20';
+            } else if (options.type === 'warning') {
+                iconEl.classList.add('fa-circle-exclamation', 'text-amber-500');
+                iconWrapper.classList.add('bg-amber-900/20', 'border-amber-500/30');
+                accent.className = 'absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500';
+                btnConfirm.className = 'flex-1 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-amber-900/20';
+            } else { // info
+                iconEl.classList.add('fa-circle-info', 'text-blue-500');
+                iconWrapper.classList.add('bg-blue-900/20', 'border-blue-500/30');
+                accent.className = 'absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500';
+                btnConfirm.className = 'flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-blue-900/20';
+            }
+
+            // Buttons
+            btnConfirm.textContent = options.confirmText || 'OK';
+            btnConfirm.onclick = () => {
+                CustomModal.close();
+                if (options.onConfirm) options.onConfirm();
+            };
+
+            if (options.showCancel) {
+                btnCancel.classList.remove('hidden');
+                btnCancel.textContent = options.cancelText || 'Cancelar';
+                btnCancel.onclick = () => {
+                    CustomModal.close();
+                    if (options.onCancel) options.onCancel();
+                };
+            } else {
+                btnCancel.classList.add('hidden');
+            }
+        }
+
+        static close() {
+            const modal = document.getElementById('custom-modal');
+            const content = document.getElementById('modal-content');
+            const backdrop = document.getElementById('modal-backdrop');
+
+            backdrop.classList.add('opacity-0');
+            content.classList.add('opacity-0', 'scale-95');
+            content.classList.remove('scale-100');
+
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        static alert(message, title = 'Aviso', type = 'info') {
+            return new Promise((resolve) => {
+                this.show({
+                    title,
+                    message,
+                    type,
+                    showCancel: false,
+                    onConfirm: resolve
+                });
+            });
+        }
+
+        static confirm(message, title = 'Confirmação', type = 'warning') {
+            return new Promise((resolve) => {
+                this.show({
+                    title,
+                    message,
+                    type,
+                    showCancel: true,
+                    confirmText: 'Sim',
+                    cancelText: 'Não',
+                    onConfirm: () => resolve(true),
+                    onCancel: () => resolve(false)
+                });
+            });
+        }
+    }
+
+    function toggleLanguageMenu(forceOpen = null) {
+      const menu = document.getElementById('lang-menu');
+      const toggle = document.getElementById('lang-toggle-btn');
+      if (!menu || !toggle) return;
+
+      const shouldOpen = forceOpen === null ? menu.classList.contains('hidden') : !!forceOpen;
+      if (shouldOpen) {
+        menu.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+      } else {
+        menu.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    function closeLanguageMenu() {
+      toggleLanguageMenu(false);
+    }
+
+    function setLanguage(lang) {
+      if (!translations[lang]) return;
+      currentLang = lang;
+      try {
+        localStorage.setItem('pixelForgeLang', lang);
+      } catch (e) {}
+
+      const langLabels = {
+          'pt': { text: 'Português (BR)', code: 'PT-BR' },
+          'pt-pt': { text: 'Português (PT)', code: 'PT-PT' },
+          'en': { text: 'English', code: 'EN' },
+          'es': { text: 'Español', code: 'ES' }
+      };
+
+      const label = langLabels[lang] || langLabels['pt'];
+      document.getElementById('current-lang').textContent = label.code;
+
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[lang][key]) {
+          el.textContent = translations[lang][key];
+        }
+      });
+
+      refreshSelectedFileCountLabels();
+      closeLanguageMenu();
+    }
+
+    document.addEventListener('click', (e) => {
+      const switcher = document.getElementById('language-switcher');
+      if (!switcher) return;
+      if (!switcher.contains(e.target)) closeLanguageMenu();
+    });
+
+    // --- Tabs Logic ---
+    window.switchTab = function(tabId) {
+      try {
+          const tabs = ['images', 'videos', 'history', 'config', 'about'];
+
+          // Hide all contents
+          tabs.forEach(id => {
+            const el = document.getElementById(`tab-${id}`);
+            if (el) {
+                el.classList.add('hidden');
+            }
+
+            const btn = document.getElementById(`tab-btn-${id}`);
+            if(btn) {
+                btn.classList.remove('border-emerald-500', 'text-emerald-400');
+                btn.classList.add('border-transparent', 'text-slate-400');
+            }
+          });
+
+          // Show selected
+          const target = document.getElementById(`tab-${tabId}`);
+          if (target) {
+              target.classList.remove('hidden');
+          } else {
+              console.error(`Target tab not found: tab-${tabId}`);
+              return;
+          }
+
+          const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+          if(activeBtn) {
+              activeBtn.classList.remove('border-transparent', 'text-slate-400');
+              activeBtn.classList.add('border-emerald-500', 'text-emerald-400');
+          }
+
+          if(tabId === 'history') renderHistory();
+      } catch(e) {
+          console.error("Error switching tab:", e);
+          // Fallback alert if something goes wrong
+          // alert("Erro ao trocar aba: " + e.message);
+      }
+    }
+
+    // --- History Logic ---
+    let sessionHistory = [];
+    try {
+        const saved = sessionStorage.getItem('pixelForgeHistory');
+        if (saved) sessionHistory = JSON.parse(saved);
+    } catch(e) { console.error('Session history load error', e); }
+
+    function addToHistory(type, result) {
+        if (!result.results || result.results.length === 0) return;
+
+        result.results.forEach(res => {
+            // Skip if no processed file (failed)
+            if (!res.processed) return;
+
+            // Extract filename safely
+            if (typeof res.processed !== 'string') return;
+            const pathParts = res.processed.split(/[\\/]/);
+            const filename = pathParts.pop() || res.processed;
+
+            const item = {
+                id: Date.now() + Math.random(),
+                timestamp: Date.now(),
+                type: type, // 'images' or 'videos'
+                filename: filename,
+                original: res.original,
+                processed: res.processed,
+                original_size: res.original_size,
+                processed_size: res.processed_size
+            };
+            sessionHistory.unshift(item); // Add to beginning
+        });
+
+        // Limit history size (e.g. 50 items)
+        if (sessionHistory.length > 50) sessionHistory = sessionHistory.slice(0, 50);
+
+        try {
+            sessionStorage.setItem('pixelForgeHistory', JSON.stringify(sessionHistory));
+        } catch(e) {}
+
+        renderHistory();
+    }
+
+    function renderHistory() {
+        const list = document.getElementById('history-list');
+        if (!list) return;
+
+        list.innerHTML = '';
+
+        if (sessionHistory.length === 0) {
+            const emptyMsg = translations[currentLang].no_history || 'Nenhum item processado nesta sessão.';
+            const empty = document.createElement('div');
+            empty.id = 'empty-history';
+            empty.className = 'text-center py-10 text-slate-500 italic';
+
+            const icon = document.createElement('i');
+            icon.className = 'fa-solid fa-clock-rotate-left text-3xl mb-3 opacity-20 block';
+            const text = document.createElement('span');
+            text.textContent = emptyMsg;
+
+            empty.appendChild(icon);
+            empty.appendChild(text);
+            list.appendChild(empty);
+            return;
+        }
+
+        sessionHistory.forEach(item => {
+            const date = new Date(item.timestamp).toLocaleTimeString();
+            const typeIcon = item.type === 'images' ? 'fa-image' : 'fa-video';
+            const typeColor = item.type === 'images' ? 'text-emerald-500' : 'text-blue-500';
+
+            const row = document.createElement('div');
+            row.className = 'bg-slate-800/50 p-3 rounded-lg border border-slate-700 hover:bg-slate-800 transition-colors flex justify-between items-center group';
+
+            const left = document.createElement('div');
+            left.className = 'flex items-center gap-3 overflow-hidden';
+
+            const iconWrap = document.createElement('div');
+            iconWrap.className = 'w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center shrink-0 border border-slate-700';
+            const icon = document.createElement('i');
+            icon.className = `fa-solid ${typeIcon} ${typeColor} text-xs`;
+            iconWrap.appendChild(icon);
+
+            const meta = document.createElement('div');
+            meta.className = 'min-w-0 flex flex-col';
+
+            const name = document.createElement('span');
+            name.className = 'text-xs text-slate-300 font-medium truncate';
+            name.title = item.filename || '';
+            name.textContent = item.filename || '';
+
+            const details = document.createElement('div');
+            details.className = 'text-[10px] text-slate-500 flex gap-2 items-center';
+            const clock = document.createElement('span');
+            clock.textContent = date;
+            details.appendChild(clock);
+
+            if (item.processed_size) {
+                const size = document.createElement('span');
+                size.className = 'bg-slate-700/50 px-1.5 rounded text-emerald-400';
+                size.textContent = item.processed_size;
+                details.appendChild(size);
+            }
+
+            meta.appendChild(name);
+            meta.appendChild(details);
+            left.appendChild(iconWrap);
+            left.appendChild(meta);
+
+            const actions = document.createElement('div');
+            actions.className = 'flex gap-2 shrink-0 opacity-100 transition-opacity';
+
+            if (item.type === 'images' && item.original && item.processed) {
+                const compareBtn = document.createElement('button');
+                compareBtn.type = 'button';
+                compareBtn.className = 'w-7 h-7 flex items-center justify-center bg-slate-700 hover:bg-emerald-600 text-slate-300 hover:text-white rounded transition-colors';
+                compareBtn.title = 'Comparar';
+                compareBtn.innerHTML = '<i class="fa-solid fa-code-compare text-xs"></i>';
+                compareBtn.addEventListener('click', () => {
+                    showComparison(item.original, item.processed, item.original_size || '-', item.processed_size || '-');
+                });
+                actions.appendChild(compareBtn);
+            }
+
+            const openBtn = document.createElement('button');
+            openBtn.type = 'button';
+            openBtn.className = 'w-7 h-7 flex items-center justify-center bg-slate-700 hover:bg-amber-600 text-slate-300 hover:text-white rounded transition-colors';
+            openBtn.title = 'Abrir Pasta';
+            openBtn.innerHTML = '<i class="fa-solid fa-folder-open text-xs"></i>';
+            openBtn.addEventListener('click', () => openLocation(item.processed));
+            actions.appendChild(openBtn);
+
+            if (item.type === 'images') {
+                const preview = document.createElement('a');
+                preview.href = `/preview?path=${encodeURIComponent(item.processed || '')}`;
+                preview.target = '_blank';
+                preview.rel = 'noopener noreferrer';
+                preview.className = 'w-7 h-7 flex items-center justify-center bg-slate-700 hover:bg-blue-600 text-slate-300 hover:text-white rounded transition-colors';
+                preview.title = 'Ver Imagem';
+                preview.innerHTML = '<i class="fa-solid fa-eye text-xs"></i>';
+                actions.appendChild(preview);
+            }
+
+            row.appendChild(left);
+            row.appendChild(actions);
+            list.appendChild(row);
+        });
+    }
+
+    async function clearHistory() {
+        if(await CustomModal.confirm(translations[currentLang].confirm_clear || 'Limpar histórico?', 'Histórico')) {
+            sessionHistory = [];
+            try {
+                sessionStorage.removeItem('pixelForgeHistory');
+            } catch(e) {}
+            renderHistory();
+        }
+    }
+
+    // --- Form Logic ---
+    function updateMode(type) {
+        const modeInput = document.querySelector(`input[name="mode_${type}"]:checked`);
+        if (!modeInput) return;
+
+        const mode = modeInput.value;
+        const uploadSource = document.getElementById(`upload-source-${type}`);
+        const folderSource = document.getElementById(`folder-source-${type}`);
+
+        if (mode === 'upload') {
+            uploadSource.classList.remove('hidden');
+            folderSource.classList.add('hidden');
+            const sourceInput = document.querySelector(`#folder-source-${type} input[name="source_dir"]`);
+            if (sourceInput) sourceInput.value = '';
+        } else {
+            uploadSource.classList.add('hidden');
+            folderSource.classList.remove('hidden');
+        }
+    }
+
+    // --- Dynamic Copyright ---
+    function updateCopyright() {
+      const year = new Date().getFullYear();
+      const copyrightEl = document.getElementById('copyright');
+      if (copyrightEl) {
+        copyrightEl.textContent = `${year} © Pixel Forge`;
+      }
+    }
+
+    const ACCEPTED_EXTENSIONS = {
+        images: new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif', '.ico', '.avif']),
+        videos: new Set(['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv'])
+    };
+
+    function getFileExtension(filename) {
+        const dotIndex = filename.lastIndexOf('.');
+        if (dotIndex < 0) return '';
+        return filename.slice(dotIndex).toLowerCase();
+    }
+
+    function filterDroppedFiles(fileList, type) {
+        const accepted = [];
+        const rejected = [];
+        const allowed = ACCEPTED_EXTENSIONS[type] || new Set();
+
+        Array.from(fileList || []).forEach(file => {
+            const ext = getFileExtension(file.name || '');
+            if (allowed.has(ext)) accepted.push(file);
+            else rejected.push(file);
+        });
+        return { accepted, rejected };
+    }
+
+    // --- Drag & Drop Logic ---
+    function handleDragOver(e, type) {
+        e.preventDefault();
+        e.stopPropagation();
+        const dropZone = document.getElementById(`upload-source-${type}`);
+        dropZone.classList.add('border-emerald-500', 'bg-slate-800/80', 'scale-[1.02]');
+        document.getElementById(`icon-upload-${type}`).classList.add('text-emerald-500', 'scale-110');
+    }
+
+    function handleDragLeave(e, type) {
+        e.preventDefault();
+        e.stopPropagation();
+        const dropZone = document.getElementById(`upload-source-${type}`);
+        dropZone.classList.remove('border-emerald-500', 'bg-slate-800/80', 'scale-[1.02]');
+        document.getElementById(`icon-upload-${type}`).classList.remove('text-emerald-500', 'scale-110');
+    }
+
+    function handleDrop(e, type) {
+        e.preventDefault();
+        e.stopPropagation();
+        const dropZone = document.getElementById(`upload-source-${type}`);
+        dropZone.classList.remove('border-emerald-500', 'bg-slate-800/80', 'scale-[1.02]');
+        document.getElementById(`icon-upload-${type}`).classList.remove('text-emerald-500', 'scale-110');
+
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        const { accepted, rejected } = filterDroppedFiles(files, type);
+
+        const fileInput = document.querySelector(`#process-form-${type} input[name="files"]`);
+        if (fileInput) {
+            if (rejected.length > 0) {
+                showToast(`${rejected.length} arquivo(s) ignorado(s): tipo não suportado`, 'error');
+            }
+            if (accepted.length === 0) {
+                showToast('Nenhum arquivo válido encontrado no drop.', 'warning');
+                return;
+            }
+
+            if (typeof DataTransfer !== 'undefined') {
+                const transfer = new DataTransfer();
+                accepted.forEach(file => transfer.items.add(file));
+                fileInput.files = transfer.files;
+            } else {
+                fileInput.files = files;
+            }
+
+            // Trigger change event manually
+            const event = new Event('change', { bubbles: true });
+            fileInput.dispatchEvent(event);
+        }
+    }
+
+    // --- Folder Selection ---
+    async function selectFolder(inputElement) {
+      try {
+        const response = await fetch('/select-folder', { method: 'POST' });
+        if (response.ok) {
+            const data = await response.json();
+            if (data.path) {
+                inputElement.value = data.path;
+            } else if (data.error) {
+                showToast(data.error, 'error');
+            }
+        } else {
+            console.error("Failed to open folder dialog");
+            showToast('Não foi possível abrir o seletor de pasta.', 'error');
+        }
+      } catch (e) {
+        console.error("Error selecting folder:", e);
+        showToast('Erro ao selecionar pasta.', 'error');
+      }
+    }
+
+    async function openLocation(path) {
+        try {
+            const response = await fetch('/open-location', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({path: path})
+            });
+            if (!response.ok) showToast('Erro ao abrir local', 'error');
+        } catch(e) {
+            console.error(e);
+            showToast('Erro ao abrir local', 'error');
+        }
+    }
+
+    // File input preview (count)
+    ['images', 'videos'].forEach(type => {
+        const fileInput = document.querySelector(`#process-form-${type} input[name="files"]`);
+        if (fileInput) {
+            fileInput.addEventListener('change', function() {
+                updateSelectedFileCountLabel(type);
+            });
+        }
+    });
+
+    // --- Processing & API ---
+    const baseTitle = document.title;
+
+    function setStatus(msg, type, context = null) {
+        // Log global status for debugging
+        // console.log(`Status [${context}]: ${msg}`);
+
+        if (context) {
+            const statusEl = document.getElementById(`status-${context}`);
+            if (statusEl) {
+                statusEl.textContent = msg;
+                statusEl.className = 'text-sm min-h-[1.5rem] flex-1 ' +
+                    (type === 'error' ? 'text-red-400' : type === 'success' ? 'text-emerald-400' : 'text-slate-400');
+            }
+        }
+
+        // Dynamic Title
+        if (type === 'processing') {
+            document.title = `▶ ${msg} - ${baseTitle}`;
+        } else if (type === 'success') {
+            document.title = `✔ ${translations[currentLang].status_success || 'Concluído'} - ${baseTitle}`;
+            setTimeout(() => document.title = baseTitle, 5000);
+        } else if (type === 'error') {
+            document.title = `✖ Erro - ${baseTitle}`;
+            setTimeout(() => document.title = baseTitle, 5000);
+        } else {
+            document.title = baseTitle;
+        }
+    }
+
+    async function clearProgress(type) {
+        if(!await CustomModal.confirm(translations[currentLang].confirm_clear || 'Limpar histórico de processamento?', 'Progresso')) return;
+
+        const section = document.getElementById(`progress-section-${type}`);
+        if (section) {
+            section.classList.add('hidden');
+
+            // Reset Progress Bar
+            const progressBar = document.getElementById(`progress-bar-${type}`);
+            if(progressBar) progressBar.style.width = '0%';
+
+            // Reset Status
+            const statusEl = document.getElementById(`status-${type}`);
+            if(statusEl) {
+                statusEl.textContent = '';
+                statusEl.className = 'text-sm text-slate-400 min-h-[1.5rem] flex-1';
+            }
+
+            const durationEl = document.getElementById(`duration-${type}`);
+            if(durationEl) durationEl.textContent = '';
+
+            // Clear Lists
+            const barsContainer = section.querySelector('.progress-bars');
+            if(barsContainer) barsContainer.innerHTML = '';
+
+            const logEl = section.querySelector('.console-log');
+            if(logEl) logEl.textContent = '';
+
+            // Remove result containers
+            const resultContainers = section.querySelectorAll('.results-container');
+            resultContainers.forEach(el => el.remove());
+        }
+    }
+
+    // --- Image Presets ---
+    const imagePresets = {
+        instagram_post: { format: 'jpg', quality: 80, width: 1080, height: 1080 },
+        instagram_story: { format: 'jpg', quality: 80, width: 1080, height: 1920 },
+        web_banner: { format: 'webp', quality: 80, width: 1920, height: null },
+        thumbnail: { format: 'webp', quality: 75, width: 1280, height: 720 },
+        print: { format: 'tiff', quality: 100, width: null, height: null }
+    };
+
+    function toggleDimensions(arg1, arg2) {
+        let type = 'images';
+        let checked = arg1;
+
+        if (typeof arg1 === 'string') {
+            type = arg1;
+            checked = arg2;
+        }
+
+        const form = document.getElementById(`process-form-${type}`);
+        if (!form) return;
+
+        const wInput = form.querySelector('input[name="width"]');
+        const hInput = form.querySelector('input[name="height"]');
+        const overlay = document.getElementById(`dim-overlay-${type}`);
+
+        if (checked) {
+            if(wInput) { wInput.value = ''; wInput.disabled = true; }
+            if(hInput) { hInput.value = ''; hInput.disabled = true; }
+            if(overlay) {
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+            }
+        } else {
+            if(wInput) wInput.disabled = false;
+            if(hInput) hInput.disabled = false;
+            if(overlay) {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+            }
+        }
+    }
+
+    function applyImagePreset(presetName) {
+        if (!presetName || presetName === 'none') return;
+        const preset = imagePresets[presetName];
+        if (!preset) return;
+
+        const form = document.getElementById('process-form-images');
+        if (preset.format) form.target_format.value = preset.format;
+        if (preset.quality) {
+            form.quality.value = preset.quality;
+            document.getElementById('quality-val-images').textContent = preset.quality + '%';
+        }
+
+        const keepOriginal = document.getElementById('keep-original-dims').checked;
+        if (!keepOriginal) {
+            if (preset.width !== undefined) form.width.value = preset.width || '';
+            if (preset.height !== undefined) form.height.value = preset.height || '';
+        } else {
+             form.width.value = '';
+             form.height.value = '';
+        }
+
+        const select = document.getElementById('image-presets');
+        select.classList.add('ring-2', 'ring-emerald-500');
+        setTimeout(() => select.classList.remove('ring-2', 'ring-emerald-500'), 500);
+    }
+
+    // --- Video Presets ---
+    const videoPresets = {
+        instagram_story: { format: 'mp4', quality: 80, width: 1080, height: 1920, strip_metadata: true, remove_audio: false },
+        youtube_4k: { format: 'mp4_hevc', quality: 85, width: 3840, height: 2160, strip_metadata: false, remove_audio: false },
+        whatsapp: { format: 'mp4', quality: 60, width: 1280, height: 720, strip_metadata: true, remove_audio: false },
+        email: { format: 'mp4', quality: 50, width: 854, height: 480, strip_metadata: true, remove_audio: false },
+        archive: { format: 'mp4_hevc', quality: 90, width: null, height: null, strip_metadata: false, remove_audio: false }
+    };
+
+    function applyPreset(presetName) {
+        if (!presetName || presetName === 'none') return;
+        const preset = videoPresets[presetName];
+        if (!preset) return;
+
+        const form = document.getElementById('process-form-videos');
+        if (preset.format) form.target_format.value = preset.format;
+        if (preset.quality) {
+            form.quality.value = preset.quality;
+            document.getElementById('quality-val-videos').textContent = preset.quality + '%';
+        }
+
+        // Apply boolean settings
+        if (preset.strip_metadata !== undefined) {
+            const el = document.getElementById('strip_metadata_videos');
+            if (el) el.checked = preset.strip_metadata;
+        }
+        if (preset.remove_audio !== undefined) {
+            const el = document.getElementById('remove_audio');
+            if (el) el.checked = preset.remove_audio;
+        }
+
+        const keepOriginal = document.getElementById('keep_original_dims_videos').checked;
+        if (!keepOriginal) {
+            if (preset.width !== undefined) form.width.value = preset.width || '';
+            if (preset.height !== undefined) form.height.value = preset.height || '';
+        } else {
+             form.width.value = '';
+             form.height.value = '';
+        }
+
+        const select = document.getElementById('video-presets');
+        select.classList.add('ring-2', 'ring-emerald-500');
+        setTimeout(() => select.classList.remove('ring-2', 'ring-emerald-500'), 500);
+    }
+
+    // --- Comparison Logic ---
+    let currentComparisonMode = 1;
+
+    function toggleComparisonMode(mode) {
+        currentComparisonMode = mode;
+        const mode1 = document.getElementById('comparison-mode-1');
+        const mode2 = document.getElementById('comparison-mode-2');
+        const btn1 = document.getElementById('btn-mode-1');
+        const btn2 = document.getElementById('btn-mode-2');
+        const hint = document.getElementById('comparison-hint');
+
+        if (mode === 1) {
+            mode1.classList.remove('hidden');
+            mode2.classList.add('hidden');
+            mode2.classList.remove('grid', 'grid-cols-2');
+            if(hint) hint.textContent = 'Arraste para comparar';
+
+            btn1.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+            btn1.classList.remove('text-slate-400', 'hover:text-white');
+
+            btn2.classList.remove('bg-emerald-600', 'text-white', 'shadow-sm');
+            btn2.classList.add('text-slate-400', 'hover:text-white');
+        } else {
+            mode1.classList.add('hidden');
+            mode2.classList.remove('hidden');
+            mode2.classList.add('grid', 'grid-cols-2');
+            if(hint) hint.textContent = 'Visualização Lado a Lado';
+
+            btn2.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+            btn2.classList.remove('text-slate-400', 'hover:text-white');
+
+            btn1.classList.remove('bg-emerald-600', 'text-white', 'shadow-sm');
+            btn1.classList.add('text-slate-400', 'hover:text-white');
+        }
+    }
+
+    function showComparison(originalPath, processedPath, originalSize, processedSize) {
+        const modal = document.getElementById('comparison-modal');
+        const imgOriginal = document.getElementById('img-original');
+        const imgProcessed = document.getElementById('img-processed');
+        const imgOriginal2 = document.getElementById('img-original-2');
+        const imgProcessed2 = document.getElementById('img-processed-2');
+
+        // Reset to default or last used mode? Let's keep last used.
+        toggleComparisonMode(currentComparisonMode);
+
+        updateComparison(50);
+        document.querySelector('#comparison-modal input[type="range"]').value = 50;
+
+        const originalSrc = `/preview?path=${encodeURIComponent(originalPath)}`;
+        const processedSrc = `/preview?path=${encodeURIComponent(processedPath)}`;
+
+        // Mode 1 Images
+        imgOriginal.src = originalSrc;
+        imgProcessed.src = processedSrc;
+
+        // Mode 2 Images
+        if(imgOriginal2) imgOriginal2.src = originalSrc;
+        if(imgProcessed2) imgProcessed2.src = processedSrc;
+
+        document.getElementById('size-original').textContent = originalSize || '-';
+        document.getElementById('size-processed').textContent = processedSize || '-';
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeComparison() {
+        const modal = document.getElementById('comparison-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function updateComparison(val) {
+        document.getElementById('img-processed-wrapper').style.width = val + '%';
+        document.getElementById('slider-handle').style.left = val + '%';
+    }
+
+    const comparisonRangeInput = document.querySelector('#comparison-modal input[type="range"]');
+    if (comparisonRangeInput) {
+        const handleComparisonTouch = (event) => {
+            if (!event.touches || event.touches.length === 0) return;
+            const touch = event.touches[0];
+            const rect = comparisonRangeInput.getBoundingClientRect();
+            const rawPercent = ((touch.clientX - rect.left) / rect.width) * 100;
+            const percent = Math.max(0, Math.min(100, Math.round(rawPercent)));
+            comparisonRangeInput.value = String(percent);
+            updateComparison(percent);
+            event.preventDefault();
+        };
+        comparisonRangeInput.addEventListener('touchstart', handleComparisonTouch, { passive: false });
+        comparisonRangeInput.addEventListener('touchmove', handleComparisonTouch, { passive: false });
+    }
+
+    // Close modal on escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+
+        const comparisonModal = document.getElementById('comparison-modal');
+        if (comparisonModal && !comparisonModal.classList.contains('hidden')) {
+            closeComparison();
+        }
+
+        const customModal = document.getElementById('custom-modal');
+        if (customModal && !customModal.classList.contains('hidden')) {
+            CustomModal.close();
+        }
+    });
+
+    async function handleProcess(e, type) {
+        e.preventDefault();
+
+        const form = e.target;
+        const btn = form.querySelector('button[type="submit"]');
+        const originalBtnText = btn.innerHTML;
+
+        // Get Tab Specific Elements
+        const progressSection = document.getElementById(`progress-section-${type}`);
+        const logEl = progressSection.querySelector('.console-log');
+        const barsContainer = progressSection.querySelector('.progress-bars');
+        const progressBar = document.getElementById(`progress-bar-${type}`);
+        const durationEl = document.getElementById(`duration-${type}`);
+
+        btn.disabled = true;
+        setStatus(translations[currentLang].status_processing, 'processing', type);
+        if(progressBar) {
+            progressBar.style.width = '30%';
+            progressBar.classList.add('animate-pulse');
+        }
+        if(durationEl) durationEl.textContent = '';
+
+        try {
+            progressSection.classList.remove('hidden');
+            const LOG_MAX_LINES = 500;
+            let logLines = [];
+            const logToConsole = (msg) => {
+                if (logEl) {
+                    logLines.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
+                    if (logLines.length > LOG_MAX_LINES) {
+                        logLines = logLines.slice(-LOG_MAX_LINES);
+                    }
+                    logEl.textContent = logLines.join('\n') + '\n';
+                    logEl.scrollTop = logEl.scrollHeight;
+                }
+                console.log(msg);
+            };
+
+            logToConsole(`Iniciando processamento (${type})...`);
+            barsContainer.innerHTML = '';
+            progressSection.querySelectorAll('.results-container').forEach(el => el.remove());
+
+            const formData = new FormData(form);
+            const modeVal = formData.get(`mode_${type}`);
+            formData.append('mode', modeVal);
+            formData.delete(`mode_${type}`);
+
+            if (typeof clientId !== 'undefined') formData.append('client_id', clientId);
+
+            // Validate Output Dir
+            const outputDir = formData.get('output_dir');
+            if (!outputDir || outputDir.trim() === '') {
+                 await CustomModal.alert((translations[currentLang].output_folder || "Pasta de destino") + " é obrigatória", "Erro", "error");
+                 btn.disabled = false;
+                 btn.innerHTML = originalBtnText;
+                 return;
+            }
+
+            if (formData.get('mode') === 'upload') {
+               const fileInput = document.querySelector(`#upload-source-${type} input`);
+               if (fileInput.files.length === 0) {
+                  const fileSelectKey = type === 'videos' ? 'select_videos' : 'select_images';
+                  await CustomModal.alert(translations[currentLang][fileSelectKey] || "Selecione arquivos", "Aviso", "warning");
+                  btn.disabled = false;
+                  btn.innerHTML = originalBtnText;
+                  return;
+               }
+            } else {
+                if (!formData.get('source_dir')) {
+                    await CustomModal.alert(translations[currentLang].folder_path || "Selecione uma pasta de origem", "Aviso", "warning");
+                    btn.disabled = false;
+                    btn.innerHTML = originalBtnText;
+                    return;
+                }
+            }
+
+            const endpoint = type === 'videos' ? '/process-video' : '/process';
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                body: formData
+            });
+
+            let result = {};
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                result = await response.json();
+            } else {
+                const rawText = await response.text();
+                result = { detail: rawText };
+            }
+
+            if(progressBar) progressBar.classList.remove('animate-pulse');
+
+            if (!response.ok) {
+                const errMsg = result.detail || translations[currentLang].status_error;
+                setStatus(errMsg, 'error', type);
+                logToConsole("Erro: " + errMsg);
+                if(progressBar) progressBar.style.width = '0%';
+                return;
+            }
+
+            if(progressBar) progressBar.style.width = '100%';
+
+            if (result.duration_ms && durationEl) {
+                const sec = (result.duration_ms / 1000).toFixed(1).replace('.', ',');
+                durationEl.textContent = `${result.duration_ms}ms (${sec} segundos)`;
+            }
+
+            if (!result.errors || result.errors.length === 0) {
+                logToConsole("Processamento concluído com sucesso!");
+
+                // Enhanced Status Message
+                const total = result.results ? result.results.length : (result.processed_count || 0);
+                const successes = result.results ? result.results.filter(r => r.success).length : total;
+                const failures = total - successes;
+
+                const typeLabel = type === 'videos' ? (total === 1 ? 'vídeo' : 'vídeos') : (total === 1 ? 'imagem' : 'imagens');
+                const statusMsg = `Concluído com sucesso! (${total} ${typeLabel})`;
+
+                const statusEl = document.getElementById(`status-${type}`);
+                if (statusEl) {
+                    statusEl.textContent = '';
+                    const statusMain = document.createElement('span');
+                    statusMain.className = 'text-emerald-400 font-bold';
+                    statusMain.textContent = statusMsg;
+                    statusEl.appendChild(statusMain);
+
+                    const okCount = document.createElement('span');
+                    okCount.className = 'text-emerald-500 ml-2 text-xs';
+                    okCount.textContent = `(${successes} OK)`;
+                    statusEl.appendChild(okCount);
+
+                    if (failures > 0) {
+                        const failCount = document.createElement('span');
+                        failCount.className = 'text-red-400 ml-2 text-xs';
+                        failCount.textContent = `(${failures} Falhas)`;
+                        statusEl.appendChild(failCount);
+                    }
+                    statusEl.className = 'text-sm min-h-[1.5rem] flex-1 flex items-center';
+                }
+
+                // Add to history
+                addToHistory(type, result);
+
+                // Show Results with Comparison Buttons
+                if (result.results && result.results.length > 0) {
+                    const resultsContainer = document.createElement('div');
+                    resultsContainer.className = "results-container mt-4 space-y-2 p-4 bg-slate-800/50 rounded-lg border border-slate-700 max-h-60 overflow-y-auto";
+
+                    result.results.forEach(item => {
+                        const row = document.createElement('div');
+                        row.className = 'flex justify-between items-center text-xs p-2 bg-slate-900 rounded border border-slate-800 gap-2';
+
+                        // Handle failure
+                        if (!item.success || !item.processed) {
+                            const failure = document.createElement('span');
+                            failure.className = 'text-red-400 truncate flex-1';
+                            failure.title = item.message || '';
+                            failure.textContent = `${item.file || 'Arquivo'}: ${item.message || 'Falha'}`;
+                            row.classList.add('border-red-900/50');
+                            row.appendChild(failure);
+                            resultsContainer.appendChild(row);
+                            return;
+                        }
+
+                        let filename = item.file;
+                        if (item.processed && typeof item.processed === 'string') {
+                            filename = item.processed.split(/[\\/]/).pop() || item.file;
+                        }
+
+                        const fileLabel = document.createElement('span');
+                        fileLabel.className = 'text-slate-300 truncate max-w-[60%]';
+                        fileLabel.textContent = filename || '';
+
+                        const actions = document.createElement('div');
+                        actions.className = 'flex gap-2 items-center';
+
+                        if (type === 'images' && item.original && item.processed) {
+                            const compareBtn = document.createElement('button');
+                            compareBtn.type = 'button';
+                            compareBtn.className = 'px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded flex items-center gap-1 transition-colors';
+                            compareBtn.innerHTML = '<i class="fa-solid fa-code-compare"></i> Comparar';
+                            compareBtn.addEventListener('click', () => {
+                                showComparison(item.original, item.processed, item.original_size || '-', item.processed_size || '-');
+                            });
+                            actions.appendChild(compareBtn);
+                        }
+
+                        const openBtn = document.createElement('button');
+                        openBtn.type = 'button';
+                        openBtn.className = 'px-2 py-1 bg-amber-700 hover:bg-amber-600 text-white rounded flex items-center gap-1 transition-colors';
+                        openBtn.title = 'Abrir Pasta';
+                        openBtn.innerHTML = '<i class="fa-solid fa-folder-open"></i>';
+                        openBtn.addEventListener('click', () => openLocation(item.processed));
+                        actions.appendChild(openBtn);
+
+                        const progressTag = document.createElement('div');
+                        progressTag.className = 'flex items-center gap-2 px-2 py-1 bg-emerald-900/20 rounded border border-emerald-900/30';
+                        progressTag.innerHTML = '<div class="w-12 h-1 bg-emerald-900/50 rounded-full overflow-hidden"><div class="h-full w-full bg-emerald-500"></div></div><span class="text-[10px] font-mono text-emerald-400">100%</span>';
+                        actions.appendChild(progressTag);
+
+                        const okTag = document.createElement('span');
+                        okTag.className = 'px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded border border-emerald-900 font-bold text-[10px]';
+                        okTag.textContent = 'OK';
+                        actions.appendChild(okTag);
+
+                        row.appendChild(fileLabel);
+                        row.appendChild(actions);
+                        resultsContainer.appendChild(row);
+                    });
+
+                    // Append to progress section
+                    progressSection.appendChild(resultsContainer);
+                }
+
+            } else {
+                const processedCount = result.processed_count || 0;
+                const errors = Array.isArray(result.errors) ? result.errors : [String(result.errors)];
+                const summary = formatI18n(
+                    'processing_finished_with_errors',
+                    { count: processedCount },
+                    `Concluído com erros (${processedCount}).`
+                );
+
+                logToConsole(summary);
+                errors.forEach((err, index) => {
+                    logToConsole(`[Erro ${index + 1}] ${err}`);
+                });
+                setStatus(summary, 'error', type);
+                console.error(errors);
+            }
+
+        } catch (error) {
+            console.error(error);
+            if(logEl) logEl.textContent += `[Erro Crítico] ${error.message}\n`;
+            setStatus(translations[currentLang].status_comm_error, 'error', type);
+            if(progressBar) progressBar.style.width = '0%';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalBtnText;
+            setTimeout(() => { if(progressBar && progressBar.style.width === '100%') progressBar.style.width = '0%'; }, 3000);
+        }
+    }
+
+    document.getElementById('process-form-images').addEventListener('submit', (e) => handleProcess(e, 'images'));
+    document.getElementById('process-form-videos').addEventListener('submit', (e) => handleProcess(e, 'videos'));
+
+    // Config loading
+    async function loadConfig() {
+        try {
+            const res = await fetch('/config');
+            if (!res.ok) return;
+            const config = await res.json();
+            const formImages = document.getElementById('process-form-images');
+
+            // Populate Image Form
+            if (config.mode === 'folder') {
+                const el = document.querySelector('input[name="mode_images"][value="folder"]');
+                if(el) el.checked = true;
+            } else {
+                const el = document.querySelector('input[name="mode_images"][value="upload"]');
+                if(el) el.checked = true;
+            }
+
+            const videoMode = config.video_mode || config.mode || 'upload';
+            if (videoMode === 'folder') {
+                const el = document.querySelector('input[name="mode_videos"][value="folder"]');
+                if (el) el.checked = true;
+            } else {
+                const el = document.querySelector('input[name="mode_videos"][value="upload"]');
+                if (el) el.checked = true;
+            }
+
+            // Default Output Paths
+            formImages.output_dir.value = config.output_dir || 'output/images';
+
+            const formVideos = document.getElementById('process-form-videos');
+            if (formVideos) {
+                formVideos.output_dir.value = 'output/videos';
+            }
+
+            if (config.source_dir) formImages.source_dir.value = config.source_dir;
+            if (config.target_format) formImages.target_format.value = config.target_format;
+            if (config.quality) formImages.quality.value = config.quality;
+            document.getElementById('quality-val-images').textContent = (config.quality || 80) + '%';
+            if (config.width) formImages.width.value = config.width;
+            if (config.height) formImages.height.value = config.height;
+
+            // Populate Sentinel Config
+            if (document.getElementById('config-sentinel-enabled')) {
+                const enabled = config.sentinel_enabled || false;
+                document.getElementById('config-sentinel-enabled').checked = enabled;
+                toggleSentinel(enabled);
+            }
+            if (document.getElementById('config-watch-folder')) {
+                document.getElementById('config-watch-folder').value = config.watch_folder || '';
+            }
+
+            updateMode('images');
+            updateMode('videos');
+            renderHistory();
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    // --- Sentinel Logic ---
+    function toggleSentinel(enabled) {
+        const settings = document.getElementById('sentinel-settings');
+        const badge = document.getElementById('sentinel-badge');
+
+        if (enabled) {
+            if(settings) settings.classList.remove('opacity-50', 'pointer-events-none');
+            if(badge) {
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+            }
+        } else {
+            if(settings) settings.classList.add('opacity-50', 'pointer-events-none');
+            if(badge) {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+            }
+        }
+    }
+
+    async function saveGlobalConfig() {
+        const enabled = document.getElementById('config-sentinel-enabled').checked;
+        const watchFolder = document.getElementById('config-watch-folder').value;
+
+        if (enabled && (!watchFolder || watchFolder.trim() === "")) {
+            showToast(translations[currentLang].status_error + ": " + translations[currentLang].folder_path, 'error');
+            return;
+        }
+
+        const config = {
+            sentinel_enabled: enabled,
+            watch_folder: watchFolder
+        };
+
+        try {
+            const res = await fetch('/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(config)
+            });
+
+            if (res.ok) {
+                const msg = enabled ? translations[currentLang].sentinel_active : translations[currentLang].status_success;
+                showToast(msg, 'success');
+            } else {
+                showToast(translations[currentLang].status_error, 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            showToast(translations[currentLang].status_comm_error, 'error');
+        }
+    }
+
+    // System Check
+    async function checkSystem() {
+        try {
+            const res = await fetch('/system-check');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            if (!data.ffmpeg) {
+                document.getElementById('ffmpeg-warning').classList.remove('hidden');
+                document.getElementById('submit-btn-videos').disabled = true;
+                document.getElementById('submit-btn-videos').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('submit-btn-videos').title = translations[currentLang].ffmpeg_missing;
+            }
+        } catch (e) {
+            console.error("System check failed", e);
+        }
+    }
+
+    // --- WebSocket Logic ---
+    let ws;
+    let wsReconnectAttempts = 0;
+    let wsReconnectTimer = null;
+    const WS_BASE_RECONNECT_MS = 1000;
+    const WS_MAX_RECONNECT_MS = 30000;
+    const clientId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+    function connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/${clientId}`;
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = function() {
+            console.log("WebSocket connected");
+            wsReconnectAttempts = 0;
+            if (wsReconnectTimer) {
+                clearTimeout(wsReconnectTimer);
+                wsReconnectTimer = null;
+            }
+        };
+
+        ws.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+
+                // Progress updates (Manual Processing)
+                if (data.type === 'progress') {
+                    // Update progress bar if it's the current file
+                    // We can also update the log specific to the category
+                    if (data.category) {
+                        const progressSection = document.getElementById(`progress-section-${data.category}`);
+
+                        // Update status text with current file
+                        setStatus(`${translations[currentLang].status_processing} ${data.file} (${data.percent}%)`, 'processing', data.category);
+
+                        if (progressSection) {
+                            const barsContainer = progressSection.querySelector('.progress-bars');
+                            const safeName = data.file.replace(/[^a-zA-Z0-9]/g, '-');
+
+                            // Check if bar exists for this file
+                            let barFill = document.getElementById(`bar-${safeName}-fill`);
+
+                            if (!barFill) {
+                                const wrapper = document.createElement('div');
+                                wrapper.className = 'bg-slate-800 rounded-full h-4 overflow-hidden relative';
+
+                                const fill = document.createElement('div');
+                                fill.id = `bar-${safeName}-fill`;
+                                fill.className = 'h-full bg-emerald-500 transition-all duration-300';
+                                fill.style.width = '0%';
+
+                                const label = document.createElement('span');
+                                label.className = 'absolute inset-0 flex items-center justify-center text-[10px] text-white font-medium drop-shadow-md z-10 truncate px-2';
+                                label.textContent = data.file || '';
+
+                                wrapper.appendChild(fill);
+                                wrapper.appendChild(label);
+                                barsContainer.appendChild(wrapper);
+                                barFill = document.getElementById(`bar-${safeName}-fill`);
+                            }
+
+                            if (barFill) barFill.style.width = `${data.percent}%`;
+                        }
+                    }
+                }
+                else if (data.type === 'status') {
+                    // Use category if provided to target specific tab
+                    setStatus(data.message, 'processing', data.category);
+                }
+
+                // Sentinel Updates
+                else if (data.type === 'sentinel_start') {
+                    const msg = (translations[currentLang].processing || translations[currentLang].status_processing || 'Processando') + ': ' + data.file;
+                    setStatus(msg, 'processing', data.file_type);
+                    showToast(msg, 'processing');
+                }
+                else if (data.type === 'sentinel_complete') {
+                    const typeLabel = data.file_type === 'videos'
+                        ? (translations[currentLang].tab_videos || 'Vídeos')
+                        : (translations[currentLang].tab_images || 'Imagens');
+                    const msg = (translations[currentLang].status_success || 'Concluído com sucesso!') + ': ' + typeLabel + ' (Sentinela)';
+                    setStatus(msg, 'success', data.file_type);
+                    showToast(msg, 'success');
+
+                    // Add to history
+                    addToHistory(data.file_type, {
+                        results: [{
+                            original: data.original,
+                            processed: data.processed,
+                            original_size: data.original_size,
+                            processed_size: data.processed_size
+                        }]
+                    });
+                }
+                else if (data.type === 'sentinel_error') {
+                    const msg = (translations[currentLang].sentinel_error || 'Erro (Sentinela)') + ': ' + data.file;
+                    setStatus(msg, 'error', data.file_type);
+                    showToast(msg + ' - ' + data.error, 'error');
+                }
+
+            } catch (e) {
+                console.error("WS Message Error", e);
+            }
+        };
+
+        ws.onclose = function() {
+            const delay = Math.min(WS_BASE_RECONNECT_MS * (2 ** wsReconnectAttempts), WS_MAX_RECONNECT_MS);
+            wsReconnectAttempts += 1;
+            console.log(`WebSocket disconnected. Reconnecting in ${delay}ms...`);
+            wsReconnectTimer = setTimeout(connectWebSocket, delay);
+        };
+
+        ws.onerror = function(err) {
+            console.error("WebSocket error", err);
+            ws.close();
+        };
+    }
+
+    // Init
+    updateCopyright();
+    loadConfig();
+    checkSystem();
+    connectWebSocket(); // Start WS connection
+    let savedLang = null;
+    try {
+      savedLang = localStorage.getItem('pixelForgeLang');
+    } catch (e) {}
+    setLanguage(savedLang && translations[savedLang] ? savedLang : 'pt');
+    updateMode('images');
+    updateMode('videos');
+  </script>
+</body>
+</html>

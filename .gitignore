@@ -1,0 +1,61 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE/editor
+.vscode/
+.idea/
+*.code-workspace
+
+# System files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs and reports
+*.log
+htmlcov/
+.coverage
+.coverage.*
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+
+# Build/distribution
+build/
+dist/
+*.spec
+*.egg-info/
+
+# Project runtime artifacts
+config.json
+output/
+temp_uploads/
+static/temp_compare/*
+!static/temp_compare/.gitkeep
+
+# Local FFmpeg binaries
+bin/*
+!bin/.gitkeep
+
+# Internal/private docs (do not publish)
+pixel_forge_mvp_readme.md
+pixel_forge_roadmap_implementacao.md
+Análise_*.md
+Estado_Atual_do_Sistema_*.md
