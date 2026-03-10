@@ -146,7 +146,11 @@ def _register_allowed_root(path: Path | str) -> None:
     """Register a root directory that endpoints can safely access."""
     try:
         candidate = Path(path).expanduser().resolve()
-        root = candidate if candidate.is_dir() else candidate.parent
+        if candidate.exists() and candidate.is_file():
+            root = candidate.parent
+        else:
+            # Treat missing paths as intended directory roots, not as parent fallback.
+            root = candidate
         with ALLOWED_PATHS_LOCK:
             ALLOWED_PATH_ROOTS.add(root)
     except Exception as exc:

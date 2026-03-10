@@ -125,6 +125,29 @@ def test_open_location_blocks_non_allowed_path(client, project_root):
     assert response.json()["detail"] == "Acesso negado para este caminho"
 
 
+def test_register_allowed_root_missing_directory_does_not_expand_to_parent(tmp_path):
+    import app.main as main_module
+
+    missing_dir = (tmp_path / "new-allowed-root").resolve()
+    parent_dir = missing_dir.parent
+
+    with main_module.ALLOWED_PATHS_LOCK:
+        original_roots = set(main_module.ALLOWED_PATH_ROOTS)
+        main_module.ALLOWED_PATH_ROOTS.clear()
+
+    try:
+        main_module._register_allowed_root(missing_dir)
+        with main_module.ALLOWED_PATHS_LOCK:
+            current_roots = set(main_module.ALLOWED_PATH_ROOTS)
+
+        assert missing_dir in current_roots
+        assert parent_dir not in current_roots
+    finally:
+        with main_module.ALLOWED_PATHS_LOCK:
+            main_module.ALLOWED_PATH_ROOTS.clear()
+            main_module.ALLOWED_PATH_ROOTS.update(original_roots)
+
+
 def test_select_folder_returns_error_details_when_dialog_fails(client, monkeypatch):
     monkeypatch.setattr(
         "app.main._open_folder_dialog",
