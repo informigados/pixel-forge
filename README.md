@@ -1,6 +1,6 @@
-# Pixel Forge
+# 🚀 Pixel Forge
 
-<div align="center">
+<div align="left">
   <p><strong>Local-first media conversion and optimization for images and video.</strong></p>
   <p>Built for speed, privacy, and production-grade reliability.</p>
 
@@ -10,16 +10,16 @@
   <a href="https://github.com/informigados/pixel-forge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/informigados/pixel-forge/actions/workflows/ci.yml/badge.svg"></a>
 </div>
 
-## Overview
+## 🌐 Overview
 
 Pixel Forge is a local web application to convert and optimize images/videos without uploading files to third-party cloud services.  
 It combines a FastAPI backend, FFmpeg/Pillow processing pipelines, and a responsive UI with real-time feedback.
 
 Default content language in the product is **Portuguese (Brazil)**, with additional locale support for **Portuguese (Portugal)**, **English**, and **Spanish**.
 
-## Key Capabilities
+## ✨ Key Capabilities
 
-### Image Processing
+### 🖼️ Image Processing
 
 - Convert between `JPG`, `PNG`, `WEBP`, `AVIF`, `BMP`, `TIFF`, and `ICO`
 - Quality controls and optional resize
@@ -27,7 +27,7 @@ Default content language in the product is **Portuguese (Brazil)**, with additio
 - Upload mode and folder mode
 - Before/after comparison with file size details
 
-### Video Processing
+### 🎬 Video Processing
 
 - Convert using FFmpeg: `MP4`, `MKV`, `WEBM`, `MOV`, `AVI`, `WMV`, `FLV`
 - HEVC option (`mp4_hevc`)
@@ -35,7 +35,7 @@ Default content language in the product is **Portuguese (Brazil)**, with additio
 - Upload mode and folder mode
 - Real-time progress updates over WebSocket
 
-### UX and Operations
+### 🧭 UX and Operations
 
 - Sentinel mode: watch a folder and auto-process new files
 - Sentinel output layout: `output/sentinel-mode/originals`, `output/sentinel-mode/processed`, `output/sentinel-mode/errors`
@@ -44,7 +44,7 @@ Default content language in the product is **Portuguese (Brazil)**, with additio
 - Smart presets for common usage scenarios
 - Responsive layout for desktop and mobile
 
-## Reliability and Security Highlights
+## 🛡️ Reliability and Security Highlights
 
 - Streamed uploads (avoid loading full files in memory)
 - Upload limits by file count and file size (configurable via environment variables)
@@ -57,7 +57,7 @@ Default content language in the product is **Portuguese (Brazil)**, with additio
 - Linux folder picker (`/select-folder`) requires a graphical session (`DISPLAY`/`WAYLAND_DISPLAY`)
 - Sentinel in-memory state currently runs on a single async loop task (parallelization would require explicit locking)
 
-## Tech Stack
+## 🧱 Tech Stack
 
 - Backend: Python, FastAPI, Uvicorn
 - Media: Pillow (+ optional AVIF plugin), FFmpeg/FFprobe
@@ -65,7 +65,7 @@ Default content language in the product is **Portuguese (Brazil)**, with additio
 - Tests: Pytest + FastAPI TestClient
 - CI: GitHub Actions (Linux and Windows matrix)
 
-## Project Structure
+## 🗂️ Project Structure
 
 ```text
 pixel-forge/
@@ -84,14 +84,14 @@ pixel-forge/
   setup_ffmpeg.py
 ```
 
-## Quick Start
+## ⚡ Quick Start
 
-### Prerequisites
+### ✅ Prerequisites
 
 - Python `3.10+`
 - FFmpeg is auto-bootstrapped on first run (or install manually if preferred)
 
-### Windows
+### 🪟 Windows
 
 ```bat
 run.bat
@@ -99,7 +99,7 @@ run.bat
 
 `run.bat` already performs bootstrap (dependencies + FFmpeg check/setup) before starting.
 
-### Linux/macOS
+### 🐧 Linux/macOS
 
 ```bash
 chmod +x run.sh
@@ -108,7 +108,7 @@ chmod +x run.sh
 
 `run.sh` already performs bootstrap (dependencies + FFmpeg check/setup) before starting.
 
-### Manual Setup (Any Platform)
+### 🛠️ Manual Setup (Any Platform)
 
 ```bash
 git clone https://github.com/informigados/pixel-forge.git
@@ -123,7 +123,7 @@ python start.py
 
 Open: `http://localhost:8000`
 
-## Running Tests
+## 🧪 Running Tests
 
 ```bash
 pip install -r requirements.txt
@@ -141,7 +141,7 @@ CI runs `compileall` + `pytest` on:
 - Ubuntu (`3.11`, `3.12`)
 - Windows (`3.11`)
 
-## Configuration (Environment Variables)
+## ⚙️ Configuration (Environment Variables)
 
 The backend supports runtime hardening with environment variables:
 
@@ -153,7 +153,7 @@ The backend supports runtime hardening with environment variables:
 - `PIXEL_FORGE_TEMP_MAX_AGE_SECONDS`
 - `PIXEL_FORGE_TEMP_MAX_COUNT`
 
-## API Endpoints (Core)
+## 🔌 API Endpoints (Core)
 
 - `GET /` UI entrypoint
 - `GET /config` / `POST /config` load/save runtime configuration
@@ -165,7 +165,7 @@ The backend supports runtime hardening with environment variables:
 - `POST /select-folder` opens native folder dialog (GUI environments)
 - `WS /ws/{client_id}` real-time progress and sentinel events
 
-## Privacy, Security, and Disclosure
+## 🔐 Privacy, Security, and Disclosure
 
 - Media is processed locally by design.
 - Review [SECURITY.md](SECURITY.md) for vulnerability reporting.
@@ -177,15 +177,15 @@ The backend supports runtime hardening with environment variables:
 
 - Initial release.
 
-## Contributing
+## 🤝 Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-## Authors
+## 👥 Authors
 
 - [INformigados](https://github.com/informigados)
 - [Alex Brito](https://github.com/AlexBritoDEV)
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

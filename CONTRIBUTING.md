@@ -1,8 +1,8 @@
-# Contributing to Pixel Forge
+# 🤝 Contributing to Pixel Forge
 
 Thank you for your interest in contributing.
 
-## Development Setup
+## 🛠️ Development Setup
 
 1. Install runtime dependencies:
    ```bash
@@ -19,7 +19,7 @@ On Windows PowerShell:
 $env:PIXEL_FORGE_DISABLE_SENTINEL='1'; pytest -q
 ```
 
-## Pull Request Checklist
+## ✅ Pull Request Checklist
 
 1. Keep changes scoped to one clear objective.
 2. Add or update tests for behavioral changes.
@@ -28,14 +28,14 @@ $env:PIXEL_FORGE_DISABLE_SENTINEL='1'; pytest -q
 5. Use descriptive commit messages.
 6. Do not commit runtime artifacts (`output/`, `temp_uploads/`, `static/temp_compare/*`) or local binaries.
 
-## Code Guidelines
+## 🧩 Code Guidelines
 
 1. Keep code readable and explicit.
 2. Prefer small, testable functions.
 3. Validate input at API boundaries.
 4. Preserve pt-BR clarity in user-facing strings.
 
-## Reporting Bugs
+## 🐞 Reporting Bugs
 
 Open an issue with:
 

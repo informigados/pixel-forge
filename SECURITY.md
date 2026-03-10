@@ -1,10 +1,10 @@
-# Security Policy
+# 🔐 Security Policy
 
-## Supported Versions
+## ✅ Supported Versions
 
 Security fixes are applied to the latest main branch state.
 
-## Reporting a Vulnerability
+## 🚨 Reporting a Vulnerability
 
 Please report vulnerabilities privately before public disclosure.
 
@@ -15,7 +15,7 @@ Include:
 3. Affected files/endpoints.
 4. Suggested mitigation (if available).
 
-## Security Baseline
+## 🛡️ Security Baseline
 
 Pixel Forge enforces:
 
