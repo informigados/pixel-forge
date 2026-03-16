@@ -25,6 +25,9 @@ def _make_transparent_png_bytes() -> bytes:
 TEST_SENTINEL_WAIT_SECONDS = 0.05
 ERROR_NO_FILE_SENT = "Nenhum arquivo enviado"
 ERROR_INVALID_MODE = "Modo inválido"
+MINIMAL_MP4_BYTES = (
+    b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"
+)
 
 
 def test_process_without_files_returns_400(client):
@@ -204,7 +207,7 @@ def test_image_upload_file_count_limit_returns_413(client, monkeypatch):
 
 def test_video_upload_file_count_limit_returns_413(client, monkeypatch):
     monkeypatch.setattr("app.main.MAX_VIDEO_UPLOAD_FILES", 1)
-    fake_video = b"not-a-real-video"
+    fake_video = MINIMAL_MP4_BYTES
     response = client.post(
         "/process-video",
         data={
@@ -420,17 +423,25 @@ def test_sentinel_video_processing_works_with_three_return_values(monkeypatch, t
         },
     )
 
+    old_in_progress = set(main_module.SENTINEL_IN_PROGRESS)
+    old_recently_handled = dict(main_module.SENTINEL_RECENTLY_HANDLED)
     main_module.SENTINEL_IN_PROGRESS.clear()
     main_module.SENTINEL_RECENTLY_HANDLED.clear()
 
-    async def _run_once():
-        task = asyncio.create_task(main_module.sentinel_loop())
-        await original_sleep(TEST_SENTINEL_WAIT_SECONDS)
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
+    try:
+        async def _run_once():
+            task = asyncio.create_task(main_module.sentinel_loop())
+            await original_sleep(TEST_SENTINEL_WAIT_SECONDS)
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await asyncio.gather(task)
 
-    asyncio.run(_run_once())
+        asyncio.run(_run_once())
+    finally:
+        main_module.SENTINEL_IN_PROGRESS.clear()
+        main_module.SENTINEL_RECENTLY_HANDLED.clear()
+        main_module.SENTINEL_IN_PROGRESS.update(old_in_progress)
+        main_module.SENTINEL_RECENTLY_HANDLED.update(old_recently_handled)
 
     message_types = [msg.get("type") for msg in sent_messages]
     assert "sentinel_start" in message_types
