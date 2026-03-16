@@ -1,6 +1,7 @@
 import shutil
 import time
-from typing import Any, Dict, List, Literal, Optional, Set
+from concurrent.futures import CancelledError as ConcurrentCancelledError, Future
+from functools import partial
 from pathlib import Path
 import logging
 import json
@@ -11,6 +12,7 @@ import sys
 from contextlib import asynccontextmanager, suppress
 
 import asyncio
+from typing import Any, Awaitable, Callable, Coroutine, Dict, List, Literal, Optional, Set
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -37,7 +39,15 @@ from .utils import (
 
 
 class SentinelVideoProcessingError(Exception):
-    """Raised when Sentinel video processing fails before file relocation."""
+    """
+    Exception raised when Sentinel video processing fails before any file relocation.
+
+    This error is reserved for failures that happen while the input video is still in
+    its original watch-folder location and before any processed/original/error file is
+    moved into Sentinel-managed directories. Callers can use it to distinguish early
+    processing failures from later file-move failures, where cleanup and retry
+    semantics may differ because files might already have been relocated.
+    """
 
 # --- WebSocket Manager ---
 class ConnectionManager:
@@ -145,6 +155,9 @@ MAX_VIDEO_UPLOAD_BYTES = _read_int_env("PIXEL_FORGE_MAX_VIDEO_UPLOAD_BYTES", 2 *
 TEMP_FILES_MAX_AGE_SECONDS = _read_int_env("PIXEL_FORGE_TEMP_MAX_AGE_SECONDS", 48 * 3600)
 TEMP_FILES_MAX_COUNT = _read_int_env("PIXEL_FORGE_TEMP_MAX_COUNT", 1000)
 SENTINEL_RECENT_TTL_SECONDS = _read_int_env("PIXEL_FORGE_SENTINEL_RECENT_TTL_SECONDS", 30)
+SENTINEL_FILE_STABILITY_SECONDS = 1
+SENTINEL_IDLE_POLL_SECONDS = 5
+SENTINEL_ACTIVE_POLL_SECONDS = 2
 
 
 def _normalize_path_string(path_value: str | Path) -> Path:
@@ -313,6 +326,186 @@ def _build_unique_destination(directory: Path, filename: str) -> Path:
     suffix = Path(filename).suffix
     return directory / f"{stem}_{stamp}{suffix}"
 
+
+def _get_sentinel_file_type(file_path: Path) -> Optional[str]:
+    if not file_path.is_file():
+        return None
+    if file_path.name.startswith(".") or file_path.name.startswith("~"):
+        return None
+    if is_supported_image_extension(file_path.name):
+        return "images"
+    if is_supported_video_extension(file_path.name):
+        return "videos"
+    return None
+
+
+def _should_skip_sentinel_file(file_key: Path, now_ts: float) -> bool:
+    if file_key in SENTINEL_IN_PROGRESS:
+        return True
+    last_handled = SENTINEL_RECENTLY_HANDLED.get(file_key)
+    return bool(last_handled and (now_ts - last_handled) < SENTINEL_RECENT_TTL_SECONDS)
+
+
+async def _check_file_stability(file_path: Path, stable_seconds: int) -> bool:
+    """Check whether a file is stable enough to process."""
+    try:
+        initial_size = file_path.stat().st_size
+        await asyncio.sleep(stable_seconds)
+        if not file_path.exists():
+            return False
+        final_size = file_path.stat().st_size
+        return initial_size == final_size
+    except Exception:
+        return False
+
+
+def _prepare_sentinel_directories(config: Dict[str, Any], watch_dir: Path) -> Dict[str, Path]:
+    output_dir = _validate_directory_input(
+        config.get("output_dir") or str(watch_dir / "output"),
+        field_name="Pasta de saída",
+        must_exist=False,
+    )
+    sentinel_root = output_dir / "sentinel-mode"
+    directories = {
+        "output": output_dir,
+        "root": sentinel_root,
+        "originals": sentinel_root / "originals",
+        "processed": sentinel_root / "processed",
+        "errors": sentinel_root / "errors",
+    }
+    for directory in directories.values():
+        directory.mkdir(parents=True, exist_ok=True)
+    _register_allowed_root(output_dir)
+    _register_allowed_root(sentinel_root)
+    return directories
+
+
+async def _process_sentinel_media(
+    file_path: Path,
+    *,
+    file_type: str,
+    config: Dict[str, Any],
+    processed_dir: Path,
+) -> Optional[Path]:
+    if file_type == "images":
+        return await asyncio.to_thread(
+            process_single_image,
+            file_path,
+            str(processed_dir),
+            config.get("target_format", "webp"),
+            config.get("quality", 80),
+            config.get("width"),
+            config.get("height"),
+            True,
+        )
+
+    target_fmt = config.get("target_format", "mp4")
+    success, msg, out_path = await video_processor.process_video(
+        file_path,
+        processed_dir,
+        target_fmt,
+        config.get("quality", 80),
+        config.get("width"),
+        config.get("height"),
+        False,
+    )
+    if not success:
+        raise SentinelVideoProcessingError(msg)
+    return Path(out_path) if out_path else None
+
+
+async def _handle_sentinel_error(
+    file_path: Path,
+    error: Exception,
+    *,
+    errors_dir: Path,
+    file_type: str,
+) -> None:
+    logger.error("Sentinel error processing %s: %s", file_path, error)
+    try:
+        dest_error = _build_unique_destination(errors_dir, file_path.name)
+        shutil.move(str(file_path), str(dest_error))
+    except Exception as move_exc:
+        logger.warning("Falha ao mover arquivo do sentinel para erros %s: %s", file_path, move_exc)
+
+    await manager.broadcast({
+        "type": "sentinel_error",
+        "file": file_path.name,
+        "error": str(error),
+        "file_type": file_type,
+    })
+
+
+async def _process_sentinel_file(
+    file_path: Path,
+    *,
+    file_key: Path,
+    file_type: str,
+    config: Dict[str, Any],
+    watch_dir: Path,
+) -> None:
+    directories = _prepare_sentinel_directories(config, watch_dir)
+
+    await manager.broadcast({
+        "type": "sentinel_start",
+        "file": file_path.name,
+        "file_type": file_type,
+    })
+
+    SENTINEL_IN_PROGRESS.add(file_key)
+    try:
+        processed_path = await _process_sentinel_media(
+            file_path,
+            file_type=file_type,
+            config=config,
+            processed_dir=directories["processed"],
+        )
+        dest_original = _build_unique_destination(directories["originals"], file_path.name)
+        shutil.move(str(file_path), str(dest_original))
+
+        await manager.broadcast({
+            "type": "sentinel_complete",
+            "original": str(dest_original),
+            "processed": str(processed_path) if processed_path else "",
+            "original_size": get_file_size_str(dest_original),
+            "processed_size": get_file_size_str(processed_path) if processed_path else "-",
+            "file_type": file_type,
+        })
+    except Exception as exc:
+        await _handle_sentinel_error(
+            file_path,
+            exc,
+            errors_dir=directories["errors"],
+            file_type=file_type,
+        )
+    finally:
+        SENTINEL_RECENTLY_HANDLED[file_key] = time.time()
+        SENTINEL_IN_PROGRESS.discard(file_key)
+
+
+def _log_future_exception(future: Future[Any], *, context: str) -> None:
+    try:
+        exc = future.exception()
+    except ConcurrentCancelledError:
+        return
+    except Exception as callback_exc:
+        logger.warning("Falha ao inspecionar tarefa em background (%s): %s", context, callback_exc)
+        return
+
+    if exc is not None:
+        logger.error(context, exc_info=(type(exc), exc, exc.__traceback__))
+
+
+def _schedule_background_coroutine(
+    coro: Coroutine[Any, Any, Any],
+    loop: asyncio.AbstractEventLoop,
+    *,
+    context: str,
+) -> Future[Any]:
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    future.add_done_callback(partial(_log_future_exception, context=context))
+    return future
+
 async def sentinel_loop():
     logger.info("Sentinel loop started.")
     while True:
@@ -321,7 +514,7 @@ async def sentinel_loop():
             
             # Check if enabled and configured
             if not config.get("sentinel_enabled") or not config.get("watch_folder"):
-                await asyncio.sleep(5)
+                await asyncio.sleep(SENTINEL_IDLE_POLL_SECONDS)
                 continue
 
             watch_dir = _validate_directory_input(
@@ -330,144 +523,37 @@ async def sentinel_loop():
                 must_exist=True,
             )
             if not watch_dir.exists() or not watch_dir.is_dir():
-                await asyncio.sleep(5)
+                await asyncio.sleep(SENTINEL_IDLE_POLL_SECONDS)
                 continue
 
             now_ts = time.time()
             _prune_sentinel_recent_cache(now_ts)
 
-            # Check for files
             for file_path in watch_dir.iterdir():
-                if not file_path.is_file():
-                    continue
-                
-                # Skip temp/hidden files
-                if file_path.name.startswith(".") or file_path.name.startswith("~"):
-                    continue
-
-                # Process if supported
-                is_image = is_supported_image_extension(file_path.name)
-                is_video = is_supported_video_extension(file_path.name)
-
-                if not is_image and not is_video:
+                file_type = _get_sentinel_file_type(file_path)
+                if not file_type:
                     continue
 
                 file_key = file_path.resolve()
-                if file_key in SENTINEL_IN_PROGRESS:
+                if _should_skip_sentinel_file(file_key, now_ts):
                     continue
-                last_handled = SENTINEL_RECENTLY_HANDLED.get(file_key)
-                if last_handled and (now_ts - last_handled) < SENTINEL_RECENT_TTL_SECONDS:
-                    continue
-
-                # Wait for file stability (size not changing)
-                try:
-                    initial_size = file_path.stat().st_size
-                    await asyncio.sleep(1)
-                    if not file_path.exists():
-                        continue
-                    final_size = file_path.stat().st_size
-                    if initial_size != final_size:
-                        continue # Still writing
-                except Exception:
+                if not await _check_file_stability(file_path, SENTINEL_FILE_STABILITY_SECONDS):
                     continue
 
-                # Process
                 logger.info(f"Sentinel detected: {file_path}")
-                
-                # Notify UI processing started
-                await manager.broadcast({
-                    "type": "sentinel_start",
-                    "file": file_path.name,
-                    "file_type": "images" if is_image else "videos",
-                })
-
-                # Determine output folder
-                output_dir = _validate_directory_input(
-                    config.get("output_dir") or str(watch_dir / "output"),
-                    field_name="Pasta de saída",
-                    must_exist=False,
+                await _process_sentinel_file(
+                    file_path,
+                    file_key=file_key,
+                    file_type=file_type,
+                    config=config,
+                    watch_dir=watch_dir,
                 )
-                sentinel_root = output_dir / "sentinel-mode"
-                sentinel_originals_dir = sentinel_root / "originals"
-                sentinel_processed_dir = sentinel_root / "processed"
-                sentinel_errors_dir = sentinel_root / "errors"
-                sentinel_originals_dir.mkdir(parents=True, exist_ok=True)
-                sentinel_processed_dir.mkdir(parents=True, exist_ok=True)
-                sentinel_errors_dir.mkdir(parents=True, exist_ok=True)
-                _register_allowed_root(output_dir)
-                _register_allowed_root(sentinel_root)
 
-                processed_path = None
-                SENTINEL_IN_PROGRESS.add(file_key)
-                try:
-                    if is_image:
-                        # Run in thread pool
-                        processed_path = await asyncio.to_thread(
-                            process_single_image,
-                            file_path,
-                            str(sentinel_processed_dir),
-                            config.get("target_format", "webp"),
-                            config.get("quality", 80),
-                            config.get("width"),
-                            config.get("height"),
-                            True # strip metadata default
-                        )
-                    elif is_video:
-                        target_fmt = config.get("target_format", "mp4")
-                        success, msg, out_path = await video_processor.process_video(
-                            file_path,
-                            sentinel_processed_dir,
-                            target_fmt,
-                            config.get("quality", 80),
-                            config.get("width"),
-                            config.get("height"),
-                            False # remove audio default
-                        )
-                        if success:
-                            processed_path = Path(out_path) if out_path else None
-                        else:
-                            raise SentinelVideoProcessingError(msg)
-                    
-                    # Move original to sentinel-mode/originals
-                    dest_original = _build_unique_destination(sentinel_originals_dir, file_path.name)
-                    shutil.move(str(file_path), str(dest_original))
-                    
-                    # Notify UI success
-                    result_msg = {
-                        "type": "sentinel_complete",
-                        "original": str(dest_original),
-                        "processed": str(processed_path) if processed_path else "",
-                        "original_size": get_file_size_str(dest_original),
-                        "processed_size": get_file_size_str(processed_path) if processed_path else "-",
-                        "file_type": "images" if is_image else "videos"
-                    }
-                    await manager.broadcast(result_msg)
-                    SENTINEL_RECENTLY_HANDLED[file_key] = time.time()
-
-                except Exception as e:
-                    logger.error(f"Sentinel error processing {file_path}: {e}")
-                    # Move original to sentinel-mode/errors
-                    try:
-                        dest_error = _build_unique_destination(sentinel_errors_dir, file_path.name)
-                        shutil.move(str(file_path), str(dest_error))
-                    except Exception as move_exc:
-                        logger.warning("Falha ao mover arquivo do sentinel para erros %s: %s", file_path, move_exc)
-                    
-                    await manager.broadcast({
-                        "type": "sentinel_error",
-                        "file": file_path.name,
-                        "error": str(e),
-                        "file_type": "images" if is_image else "videos",
-                    })
-                    SENTINEL_RECENTLY_HANDLED[file_key] = time.time()
-                finally:
-                    SENTINEL_IN_PROGRESS.discard(file_key)
-
-            await asyncio.sleep(2)
+            await asyncio.sleep(SENTINEL_ACTIVE_POLL_SECONDS)
 
         except Exception as e:
             logger.error(f"Sentinel loop error: {e}")
-            await asyncio.sleep(5)
+            await asyncio.sleep(SENTINEL_IDLE_POLL_SECONDS)
 
 
 @asynccontextmanager
@@ -711,6 +797,210 @@ class VideoProcessRequest(BaseModel):
     height: Optional[int] = None
     remove_audio: bool = False
 
+
+def _resolve_image_request(
+    request: Optional[ProcessRequest],
+    *,
+    mode: Optional[str],
+    output_dir: Optional[str],
+    target_format: Optional[str],
+    quality: Optional[int],
+    width: Optional[int],
+    height: Optional[int],
+    strip_metadata: Optional[bool],
+) -> Dict[str, Any]:
+    req_mode = mode or (request.mode if request else "upload")
+    req_output = output_dir or (request.output_dir if request else "")
+    req_format = target_format or (request.target_format if request else "jpg")
+    req_quality = quality if quality is not None else (request.quality if request else 80)
+    req_width = width or (request.width if request else None)
+    req_height = height or (request.height if request else None)
+    req_strip = strip_metadata if strip_metadata is not None else (request.strip_metadata if request else True)
+
+    if not req_output:
+        raise HTTPException(status_code=400, detail="Pasta de destino obrigatória")
+    output_path = _validate_directory_input(req_output, field_name="Pasta de destino", must_exist=False)
+    _register_allowed_root(output_path)
+
+    return {
+        "mode": req_mode,
+        "output_path": output_path,
+        "target_format": req_format,
+        "quality": req_quality,
+        "width": req_width,
+        "height": req_height,
+        "strip_metadata": req_strip,
+    }
+
+
+def _build_image_progress_callbacks(
+    loop: asyncio.AbstractEventLoop,
+    client_id: Optional[str],
+) -> tuple[Callable[[str, int], Awaitable[None]], Callable[[str, int], None]]:
+    async def report_progress_async(filename: str, percent: int) -> None:
+        if client_id:
+            await manager.send_personal_message({
+                "type": "progress",
+                "category": "images",
+                "file": filename,
+                "percent": percent,
+            }, client_id)
+
+    def report_progress_sync(filename: str, percent: int) -> None:
+        _schedule_background_coroutine(
+            report_progress_async(filename, percent),
+            loop,
+            context=f"Erro ao reportar progresso de imagem para {filename}",
+        )
+
+    return report_progress_async, report_progress_sync
+
+
+async def _process_folder_images(
+    *,
+    source_dir: str,
+    output_path: Path,
+    target_format: str,
+    quality: int,
+    width: Optional[int],
+    height: Optional[int],
+    strip_metadata: bool,
+    report_progress_sync: Callable[[str, int], None],
+) -> Dict[str, Any]:
+    src = _validate_directory_input(
+        source_dir,
+        field_name="Pasta de origem",
+        must_exist=True,
+    )
+    count, errors, duration, results = await asyncio.to_thread(
+        process_directory,
+        str(src),
+        str(output_path),
+        target_format,
+        quality,
+        width,
+        height,
+        strip_metadata,
+        report_progress_sync,
+    )
+    return {
+        "status": "success",
+        "processed_count": count,
+        "errors": errors,
+        "duration_ms": duration,
+        "results": results,
+    }
+
+
+async def _process_uploaded_images(
+    *,
+    output_path: Path,
+    target_format: str,
+    quality: int,
+    width: Optional[int],
+    height: Optional[int],
+    strip_metadata: bool,
+    files: List[UploadFile],
+    report_progress_async: Callable[[str, int], Awaitable[None]],
+) -> Dict[str, Any]:
+    if len(files) > MAX_IMAGE_UPLOAD_FILES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Quantidade de arquivos excede o limite de {MAX_IMAGE_UPLOAD_FILES}",
+        )
+
+    temp_compare_dir = STATIC_DIR / "temp_compare"
+    temp_compare_dir.mkdir(parents=True, exist_ok=True)
+    _cleanup_temp_directory(temp_compare_dir, TEMP_FILES_MAX_AGE_SECONDS, TEMP_FILES_MAX_COUNT)
+
+    start = time.perf_counter()
+    errors: List[str] = []
+    results: List[Dict[str, str]] = []
+    processed_count = 0
+    total_files = len(files)
+
+    for index, upload in enumerate(files):
+        original_name = upload.filename or f"upload_{index + 1}"
+        safe_name = sanitize_filename(original_name) or f"upload_{index + 1}"
+        safe_suffix = Path(safe_name).suffix.lower()
+        original_path: Optional[Path] = None
+
+        try:
+            if not is_supported_image_extension(safe_name):
+                errors.append(f"Arquivo {original_name}: extensão não suportada")
+                continue
+
+            timestamp = int(time.time() * 1000)
+            stem = Path(safe_name).stem or f"upload_{index + 1}"
+            original_filename = f"upload_{stem}_{timestamp}{safe_suffix}"
+            original_path = temp_compare_dir / original_filename
+
+            bytes_written = 0
+            file_too_large = False
+            with open(original_path, "wb") as buffer:
+                while True:
+                    chunk = await upload.read(UPLOAD_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    bytes_written += len(chunk)
+                    if bytes_written > MAX_IMAGE_UPLOAD_BYTES:
+                        file_too_large = True
+                        break
+                    buffer.write(chunk)
+
+            if file_too_large:
+                errors.append(
+                    f"Arquivo {original_name}: tamanho excede o limite de {MAX_IMAGE_UPLOAD_BYTES // (1024 * 1024)} MB"
+                )
+                try:
+                    original_path.unlink(missing_ok=True)
+                except Exception as exc:
+                    logger.warning("Falha ao remover upload de imagem excedido %s: %s", original_path, exc)
+                continue
+
+            processed_path = await asyncio.to_thread(
+                process_single_image,
+                original_path,
+                str(output_path),
+                target_format,
+                quality,
+                width,
+                height,
+                strip_metadata,
+            )
+            results.append({
+                "file": original_name,
+                "success": True,
+                "original": str(original_path),
+                "processed": str(processed_path),
+                "original_size": get_file_size_str(original_path),
+                "processed_size": get_file_size_str(processed_path),
+            })
+            processed_count += 1
+        except Exception as exc:
+            errors.append(f"Arquivo {original_name}: {exc}")
+            logger.error("Erro ao processar upload de imagem %s: %s", original_name, exc)
+            if original_path and original_path.exists():
+                try:
+                    original_path.unlink(missing_ok=True)
+                except Exception as cleanup_exc:
+                    logger.warning("Falha ao limpar upload de imagem %s: %s", original_path, cleanup_exc)
+        finally:
+            try:
+                await upload.close()
+            except Exception as exc:
+                logger.debug("Falha ao fechar upload de imagem %s: %s", original_name, exc)
+            percent = int(((index + 1) / total_files) * 100) if total_files > 0 else 100
+            await report_progress_async(original_name, percent)
+
+    return {
+        "status": "success",
+        "processed_count": processed_count,
+        "errors": errors,
+        "duration_ms": int((time.perf_counter() - start) * 1000),
+        "results": results,
+    }
+
 @app.post("/process")
 async def process_images(
     request: Optional[ProcessRequest] = None,
@@ -725,159 +1015,50 @@ async def process_images(
     client_id: str = Form(None),
     files: List[UploadFile] = File(None),
 ):
-    # Handle both JSON (if applicable) and Form data
-    # ... logic remains similar, just mapping new fields ...
-    
-    # Priority to Form data if present
-    req_mode = mode or (request.mode if request else "upload")
-    req_output = output_dir or (request.output_dir if request else "")
-    req_format = target_format or (request.target_format if request else "jpg")
-    req_quality = quality if quality is not None else (request.quality if request else 80)
-    req_width = width or (request.width if request else None)
-    req_height = height or (request.height if request else None)
-    req_strip = strip_metadata if strip_metadata is not None else (request.strip_metadata if request else True)
-    
-    if not req_output:
-        raise HTTPException(status_code=400, detail="Pasta de destino obrigatória")
-    req_output_path = _validate_directory_input(req_output, field_name="Pasta de destino", must_exist=False)
-    _register_allowed_root(req_output_path)
-
-    # Define progress callback logic
+    resolved = _resolve_image_request(
+        request,
+        mode=mode,
+        output_dir=output_dir,
+        target_format=target_format,
+        quality=quality,
+        width=width,
+        height=height,
+        strip_metadata=strip_metadata,
+    )
     loop = asyncio.get_running_loop()
-    
-    async def report_progress_async(filename: str, percent: int):
-        if client_id:
-            await manager.send_personal_message({
-                "type": "progress",
-                "category": "images",
-                "file": filename,
-                "percent": percent
-            }, client_id)
-
-    def report_progress_sync(filename: str, percent: int):
-        asyncio.run_coroutine_threadsafe(report_progress_async(filename, percent), loop)
+    report_progress_async, report_progress_sync = _build_image_progress_callbacks(loop, client_id)
 
     try:
-        if req_mode == "folder":
-            if not source_dir and (not request or not request.source_dir):
-                 raise HTTPException(status_code=400, detail="Pasta de origem obrigatória no modo pasta")
-            src = _validate_directory_input(
-                source_dir or request.source_dir,
-                field_name="Pasta de origem",
-                must_exist=True,
+        if resolved["mode"] == "folder":
+            folder_source = source_dir or (request.source_dir if request else None)
+            if not folder_source:
+                raise HTTPException(status_code=400, detail="Pasta de origem obrigatória no modo pasta")
+            return await _process_folder_images(
+                source_dir=folder_source,
+                output_path=resolved["output_path"],
+                target_format=resolved["target_format"],
+                quality=resolved["quality"],
+                width=resolved["width"],
+                height=resolved["height"],
+                strip_metadata=resolved["strip_metadata"],
+                report_progress_sync=report_progress_sync,
             )
-            
-            # Run in thread pool to avoid blocking event loop
-            count, errors, duration, results = await asyncio.to_thread(
-                process_directory,
-                str(src), str(req_output_path), req_format, req_quality, req_width, req_height, req_strip,
-                report_progress_sync
-            )
-            return {"status": "success", "processed_count": count, "errors": errors, "duration_ms": duration, "results": results}
-            
-        elif req_mode == "upload":
+
+        if resolved["mode"] == "upload":
             if not files:
-                 raise HTTPException(status_code=400, detail="Nenhum arquivo enviado")
-            if len(files) > MAX_IMAGE_UPLOAD_FILES:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"Quantidade de arquivos excede o limite de {MAX_IMAGE_UPLOAD_FILES}",
-                )
+                raise HTTPException(status_code=400, detail="Nenhum arquivo enviado")
+            return await _process_uploaded_images(
+                output_path=resolved["output_path"],
+                target_format=resolved["target_format"],
+                quality=resolved["quality"],
+                width=resolved["width"],
+                height=resolved["height"],
+                strip_metadata=resolved["strip_metadata"],
+                files=files,
+                report_progress_async=report_progress_async,
+            )
 
-            temp_compare_dir = STATIC_DIR / "temp_compare"
-            temp_compare_dir.mkdir(parents=True, exist_ok=True)
-            _cleanup_temp_directory(temp_compare_dir, TEMP_FILES_MAX_AGE_SECONDS, TEMP_FILES_MAX_COUNT)
-
-            start = time.perf_counter()
-            errors: List[str] = []
-            results: List[Dict[str, str]] = []
-            processed_count = 0
-            total_files = len(files)
-
-            for index, upload in enumerate(files):
-                original_name = upload.filename or f"upload_{index + 1}"
-                safe_name = sanitize_filename(original_name) or f"upload_{index + 1}"
-                safe_suffix = Path(safe_name).suffix.lower()
-                original_path: Optional[Path] = None
-
-                try:
-                    if not is_supported_image_extension(safe_name):
-                        errors.append(f"Arquivo {original_name}: extensão não suportada")
-                        continue
-
-                    timestamp = int(time.time() * 1000)
-                    stem = Path(safe_name).stem or f"upload_{index + 1}"
-                    original_filename = f"upload_{stem}_{timestamp}{safe_suffix}"
-                    original_path = temp_compare_dir / original_filename
-
-                    bytes_written = 0
-                    file_too_large = False
-                    with open(original_path, "wb") as buffer:
-                        while True:
-                            chunk = await upload.read(UPLOAD_CHUNK_SIZE)
-                            if not chunk:
-                                break
-                            bytes_written += len(chunk)
-                            if bytes_written > MAX_IMAGE_UPLOAD_BYTES:
-                                file_too_large = True
-                                break
-                            buffer.write(chunk)
-
-                    if file_too_large:
-                        errors.append(
-                            f"Arquivo {original_name}: tamanho excede o limite de {MAX_IMAGE_UPLOAD_BYTES // (1024 * 1024)} MB"
-                        )
-                        try:
-                            original_path.unlink(missing_ok=True)
-                        except Exception as exc:
-                            logger.warning("Falha ao remover upload de imagem excedido %s: %s", original_path, exc)
-                        continue
-
-                    output_path = await asyncio.to_thread(
-                        process_single_image,
-                        original_path,
-                        str(req_output_path),
-                        req_format,
-                        req_quality,
-                        req_width,
-                        req_height,
-                        req_strip,
-                    )
-                    results.append({
-                        "file": original_name,
-                        "success": True,
-                        "original": str(original_path),
-                        "processed": str(output_path),
-                        "original_size": get_file_size_str(original_path),
-                        "processed_size": get_file_size_str(output_path),
-                    })
-                    processed_count += 1
-                except Exception as exc:
-                    errors.append(f"Arquivo {original_name}: {exc}")
-                    logger.error("Erro ao processar upload de imagem %s: %s", original_name, exc)
-                    if original_path and original_path.exists():
-                        try:
-                            original_path.unlink(missing_ok=True)
-                        except Exception as cleanup_exc:
-                            logger.warning("Falha ao limpar upload de imagem %s: %s", original_path, cleanup_exc)
-                finally:
-                    try:
-                        await upload.close()
-                    except Exception as exc:
-                        logger.debug("Falha ao fechar upload de imagem %s: %s", original_name, exc)
-                    percent = int(((index + 1) / total_files) * 100) if total_files > 0 else 100
-                    await report_progress_async(original_name, percent)
-
-            duration_ms = int((time.perf_counter() - start) * 1000)
-            return {
-                "status": "success",
-                "processed_count": processed_count,
-                "errors": errors,
-                "duration_ms": duration_ms,
-                "results": results,
-            }
-        else:
-            raise HTTPException(status_code=400, detail="Modo inválido")
+        raise HTTPException(status_code=400, detail="Modo inválido")
     except HTTPException:
         raise
     except Exception:

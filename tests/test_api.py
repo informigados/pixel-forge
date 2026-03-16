@@ -1,5 +1,6 @@
 import asyncio
 import io
+import logging
 import tempfile
 from contextlib import suppress
 from pathlib import Path
@@ -340,6 +341,24 @@ def test_websocket_receives_image_progress_for_folder_processing(client):
             assert ws_msg["category"] == "images"
             assert ws_msg["file"] == "progress.png"
             assert isinstance(ws_msg["percent"], int)
+
+
+def test_log_future_exception_records_background_failures(caplog):
+    from concurrent.futures import Future
+
+    import app.main as main_module
+
+    future = Future()
+    try:
+        raise RuntimeError("falha-background")
+    except RuntimeError as exc:
+        future.set_exception(exc)
+
+    with caplog.at_level(logging.ERROR, logger="pixelforge"):
+        main_module._log_future_exception(future, context="Erro ao reportar progresso")
+
+    assert "Erro ao reportar progresso" in caplog.text
+    assert "falha-background" in caplog.text
 
 
 def test_ensure_directory_accepts_path_instance(tmp_path):
