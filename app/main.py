@@ -492,7 +492,7 @@ async def lifespan(_: FastAPI):
         if sentinel_task:
             sentinel_task.cancel()
             with suppress(asyncio.CancelledError):
-                await sentinel_task
+                _ = await sentinel_task
 
 
 app = FastAPI(title="Pixel Forge", version="0.1.0", lifespan=lifespan)

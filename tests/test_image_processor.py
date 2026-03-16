@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from PIL import Image
 
 from app.image_processor import process_single_image
