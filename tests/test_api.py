@@ -184,7 +184,7 @@ def test_select_folder_returns_error_details_when_dialog_fails(client, monkeypat
 
 def test_image_upload_file_count_limit_returns_413(client, monkeypatch):
     monkeypatch.setattr("app.main.MAX_IMAGE_UPLOAD_FILES", 1)
-    payload = _make_png_bytes()
+    image_bytes = _make_png_bytes()
     response = client.post(
         "/process",
         data={
@@ -194,8 +194,8 @@ def test_image_upload_file_count_limit_returns_413(client, monkeypatch):
             "quality": "80",
         },
         files=[
-            ("files", ("a.png", payload, "image/png")),
-            ("files", ("b.png", payload, "image/png")),
+            ("files", ("a.png", image_bytes, "image/png")),
+            ("files", ("b.png", image_bytes, "image/png")),
         ],
     )
     assert response.status_code == 413
@@ -394,8 +394,8 @@ def test_sentinel_video_processing_works_with_three_return_values(monkeypatch, t
     async def fake_broadcast(message):
         sent_messages.append(message)
 
-    async def fake_process_video(*args, **kwargs):
-        out_dir = Path(args[1])
+    async def fake_process_video(file_path, output_dir, *args, **kwargs):
+        out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "clip.mp4"
         out_path.write_bytes(b"processed")
@@ -428,7 +428,7 @@ def test_sentinel_video_processing_works_with_three_return_values(monkeypatch, t
         await original_sleep(TEST_SENTINEL_WAIT_SECONDS)
         task.cancel()
         with suppress(asyncio.CancelledError):
-            _ = await task
+            await task
 
     asyncio.run(_run_once())
 
