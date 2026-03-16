@@ -35,6 +35,10 @@ from .utils import (
     sanitize_filename,
 )
 
+
+class SentinelVideoProcessingError(Exception):
+    """Raised when Sentinel video processing fails before file relocation."""
+
 # --- WebSocket Manager ---
 class ConnectionManager:
     def __init__(self):
@@ -359,7 +363,8 @@ async def sentinel_loop():
                 try:
                     initial_size = file_path.stat().st_size
                     await asyncio.sleep(1)
-                    if not file_path.exists(): continue 
+                    if not file_path.exists():
+                        continue
                     final_size = file_path.stat().st_size
                     if initial_size != final_size:
                         continue # Still writing
@@ -421,7 +426,7 @@ async def sentinel_loop():
                         if success:
                             processed_path = Path(out_path) if out_path else None
                         else:
-                             raise Exception(msg)
+                            raise SentinelVideoProcessingError(msg)
                     
                     # Move original to sentinel-mode/originals
                     dest_original = _build_unique_destination(sentinel_originals_dir, file_path.name)
