@@ -143,19 +143,51 @@ TEMP_FILES_MAX_COUNT = _read_int_env("PIXEL_FORGE_TEMP_MAX_COUNT", 1000)
 SENTINEL_RECENT_TTL_SECONDS = _read_int_env("PIXEL_FORGE_SENTINEL_RECENT_TTL_SECONDS", 30)
 
 
-def _register_allowed_root(path: Path | str) -> None:
-    """Register a root directory that endpoints can safely access."""
+def _normalize_path_string(path_value: str | Path) -> Path:
+    raw = str(path_value).strip()
+    if not raw:
+        raise ValueError("Caminho vazio")
+    if "\x00" in raw:
+        raise ValueError("Caminho inválido")
+
+    expanded = os.path.expanduser(raw)
+    if not os.path.isabs(expanded):
+        expanded = os.path.join(str(BASE_DIR), expanded)
+    normalized = os.path.realpath(os.path.abspath(expanded))
+    return Path(normalized)
+
+
+def _validate_directory_input(
+    path_value: str | Path,
+    *,
+    field_name: str,
+    must_exist: bool,
+) -> Path:
     try:
-        candidate = Path(path).expanduser().resolve()
-        if candidate.exists() and candidate.is_file():
-            root = candidate.parent
-        else:
-            # Treat missing paths as intended directory roots, not as parent fallback.
-            root = candidate
-        with ALLOWED_PATHS_LOCK:
-            ALLOWED_PATH_ROOTS.add(root)
-    except Exception as exc:
-        logger.warning("Não foi possível registrar caminho permitido %s: %s", path, exc)
+        candidate = _normalize_path_string(path_value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field_name} inválido") from exc
+
+    if must_exist:
+        if not candidate.exists() or not candidate.is_dir():
+            raise HTTPException(status_code=400, detail=f"{field_name} inválido")
+    else:
+        parent = candidate if candidate.exists() else candidate.parent
+        if not parent.exists() or not parent.is_dir():
+            raise HTTPException(status_code=400, detail=f"{field_name} inválido")
+    return candidate
+
+
+def _register_allowed_root(path: Path) -> None:
+    """Register a root directory that endpoints can safely access."""
+    candidate = path
+    if candidate.exists() and candidate.is_file():
+        root = candidate.parent
+    else:
+        # Treat missing paths as intended directory roots, not as parent fallback.
+        root = candidate
+    with ALLOWED_PATHS_LOCK:
+        ALLOWED_PATH_ROOTS.add(root)
 
 
 def _is_within_root(path: Path, root: Path) -> bool:
@@ -167,13 +199,45 @@ def _is_within_root(path: Path, root: Path) -> bool:
 
 
 def _is_allowed_path(path: Path) -> bool:
-    try:
-        resolved = path.expanduser().resolve()
-    except Exception:
-        return False
+    resolved = os.path.realpath(os.path.abspath(str(path)))
     with ALLOWED_PATHS_LOCK:
-        roots = list(ALLOWED_PATH_ROOTS)
-    return any(_is_within_root(resolved, root) for root in roots)
+        roots = [os.path.realpath(os.path.abspath(str(root))) for root in ALLOWED_PATH_ROOTS]
+
+    for root in roots:
+        try:
+            if os.path.commonpath([resolved, root]) == root:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _validate_allowed_media_file(path_value: str) -> Path:
+    try:
+        candidate = _normalize_path_string(path_value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Caminho inválido") from exc
+
+    if not _is_allowed_path(candidate):
+        raise HTTPException(status_code=403, detail="Acesso negado para este caminho")
+    if not candidate.exists() or not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    if not (is_supported_image_extension(candidate.name) or is_supported_video_extension(candidate.name)):
+        raise HTTPException(status_code=400, detail="Apenas arquivos de mídia podem ser visualizados")
+    return candidate
+
+
+def _validate_allowed_existing_path(path_value: str) -> Path:
+    try:
+        candidate = _normalize_path_string(path_value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Caminho inválido") from exc
+
+    if not _is_allowed_path(candidate):
+        raise HTTPException(status_code=403, detail="Acesso negado para este caminho")
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    return candidate
 
 
 def _initialize_allowed_roots() -> None:
@@ -251,7 +315,11 @@ async def sentinel_loop():
                 await asyncio.sleep(5)
                 continue
 
-            watch_dir = Path(config["watch_folder"])
+            watch_dir = _validate_directory_input(
+                config["watch_folder"],
+                field_name="Pasta monitorada",
+                must_exist=True,
+            )
             if not watch_dir.exists() or not watch_dir.is_dir():
                 await asyncio.sleep(5)
                 continue
@@ -304,7 +372,11 @@ async def sentinel_loop():
                 })
 
                 # Determine output folder
-                output_dir = Path(config.get("output_dir") or str(watch_dir / "output"))
+                output_dir = _validate_directory_input(
+                    config.get("output_dir") or str(watch_dir / "output"),
+                    field_name="Pasta de saída",
+                    must_exist=False,
+                )
                 sentinel_root = output_dir / "sentinel-mode"
                 sentinel_originals_dir = sentinel_root / "originals"
                 sentinel_processed_dir = sentinel_root / "processed"
@@ -398,7 +470,16 @@ async def lifespan(_: FastAPI):
     _cleanup_temp_directory(BASE_DIR / "temp_uploads", TEMP_FILES_MAX_AGE_SECONDS, TEMP_FILES_MAX_COUNT)
     config = load_config()
     if config.get("output_dir"):
-        _register_allowed_root(config["output_dir"])
+        try:
+            _register_allowed_root(
+                _validate_directory_input(
+                    config["output_dir"],
+                    field_name="Pasta de saída",
+                    must_exist=False,
+                )
+            )
+        except HTTPException as exc:
+            logger.warning("Configuração ignorada para output_dir inválido: %s", exc.detail)
     if _read_bool_env("PIXEL_FORGE_DISABLE_SENTINEL", False):
         logger.info("Sentinel loop desativado por variável de ambiente.")
         sentinel_task = None
@@ -523,12 +604,23 @@ def get_config() -> Dict[str, Any]:
 def update_config(config: ConfigUpdateRequest) -> Dict[str, str]:
     try:
         payload = config.model_dump(exclude_none=True) if hasattr(config, "model_dump") else config.dict(exclude_none=True)
+        for key in ("output_dir", "source_dir", "watch_folder"):
+            if key in payload and payload[key]:
+                must_exist = key != "output_dir"
+                validated = _validate_directory_input(
+                    payload[key],
+                    field_name=key,
+                    must_exist=must_exist,
+                )
+                payload[key] = str(validated)
+                _register_allowed_root(validated)
         save_config(payload)
-        if payload.get("output_dir"):
-            _register_allowed_root(payload["output_dir"])
         return {"status": "ok"}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Erro ao atualizar configuração")
+        raise HTTPException(status_code=500, detail="Erro interno ao atualizar configuração")
 
 
 @app.post("/select-folder")
@@ -536,7 +628,13 @@ def select_folder_dialog() -> Dict[str, str]:
     """Opens a native folder selection dialog on the server machine."""
     folder, error = _open_folder_dialog()
     if folder:
-        return {"path": folder}
+        try:
+            validated = _validate_directory_input(folder, field_name="Pasta selecionada", must_exist=True)
+        except HTTPException as exc:
+            logger.warning("Seletor retornou pasta inválida: %s", exc.detail)
+            return {"path": "", "error": "Pasta selecionada inválida"}
+        _register_allowed_root(validated)
+        return {"path": str(validated)}
     if error:
         return {"path": "", "error": error}
     return {"path": ""}
@@ -554,13 +652,7 @@ def system_check() -> Dict[str, bool]:
 @app.get("/preview")
 def preview_file(path: str):
     """Serves a local file for preview/comparison."""
-    file_path = Path(path).expanduser().resolve()
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-    if not _is_allowed_path(file_path):
-        raise HTTPException(status_code=403, detail="Acesso negado para este caminho")
-    if not (is_supported_image_extension(file_path.name) or is_supported_video_extension(file_path.name)):
-        raise HTTPException(status_code=400, detail="Apenas arquivos de mídia podem ser visualizados")
+    file_path = _validate_allowed_media_file(path)
     return FileResponse(file_path)
 
 
@@ -568,13 +660,7 @@ def preview_file(path: str):
 def open_file_location(path: str = Body(..., embed=True)):
     """Opens the file location in the OS file explorer."""
     logger.info(f"Opening location for: {path}")
-    
-    p = Path(path).resolve()
-    if not p.exists():
-        logger.error(f"Path not found: {p}")
-        raise HTTPException(status_code=404, detail=f"Caminho não encontrado: {path}")
-    if not _is_allowed_path(p):
-        raise HTTPException(status_code=403, detail="Acesso negado para este caminho")
+    p = _validate_allowed_existing_path(path)
     
     try:
         if platform.system() == "Windows":
@@ -591,9 +677,9 @@ def open_file_location(path: str = Body(..., embed=True)):
             folder = p.parent if p.is_file() else p
             subprocess.Popen(["xdg-open", str(folder)])
         return {"status": "ok"}
-    except Exception as e:
-        logger.error(f"Error opening location: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.error("Error opening location for %s: %s", p, exc)
+        raise HTTPException(status_code=500, detail="Erro interno ao abrir localização")
 
 class ProcessRequest(BaseModel):
     mode: Literal["upload", "folder"] = "upload"
@@ -643,7 +729,8 @@ async def process_images(
     
     if not req_output:
         raise HTTPException(status_code=400, detail="Pasta de destino obrigatória")
-    _register_allowed_root(req_output)
+    req_output_path = _validate_directory_input(req_output, field_name="Pasta de destino", must_exist=False)
+    _register_allowed_root(req_output_path)
 
     # Define progress callback logic
     loop = asyncio.get_running_loop()
@@ -664,12 +751,16 @@ async def process_images(
         if req_mode == "folder":
             if not source_dir and (not request or not request.source_dir):
                  raise HTTPException(status_code=400, detail="Pasta de origem obrigatória no modo pasta")
-            src = source_dir or request.source_dir
+            src = _validate_directory_input(
+                source_dir or request.source_dir,
+                field_name="Pasta de origem",
+                must_exist=True,
+            )
             
             # Run in thread pool to avoid blocking event loop
             count, errors, duration, results = await asyncio.to_thread(
                 process_directory,
-                src, req_output, req_format, req_quality, req_width, req_height, req_strip,
+                str(src), str(req_output_path), req_format, req_quality, req_width, req_height, req_strip,
                 report_progress_sync
             )
             return {"status": "success", "processed_count": count, "errors": errors, "duration_ms": duration, "results": results}
@@ -735,7 +826,7 @@ async def process_images(
                     output_path = await asyncio.to_thread(
                         process_single_image,
                         original_path,
-                        req_output,
+                        str(req_output_path),
                         req_format,
                         req_quality,
                         req_width,
@@ -779,9 +870,9 @@ async def process_images(
             raise HTTPException(status_code=400, detail="Modo inválido")
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error in process_images: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error in process_images")
+        raise HTTPException(status_code=500, detail="Erro interno ao processar imagens")
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
@@ -808,7 +899,8 @@ async def process_videos(
 ):
     try:
         results = []
-        _register_allowed_root(output_dir)
+        output_dir_path = _validate_directory_input(output_dir, field_name="Pasta de destino", must_exist=False)
+        _register_allowed_root(output_dir_path)
         
         # Define progress callback
         async def report_progress(filename: str, percent: int):
@@ -823,11 +915,12 @@ async def process_videos(
         if mode == "folder":
             if not source_dir:
                  raise HTTPException(status_code=400, detail="Pasta de origem obrigatória")
+            source_dir_path = _validate_directory_input(source_dir, field_name="Pasta de origem", must_exist=True)
             
             # Iterate video files in folder
-            total_videos = sum(1 for _ in iter_video_files(source_dir))
+            total_videos = sum(1 for _ in iter_video_files(source_dir_path))
 
-            for i, v_path in enumerate(iter_video_files(source_dir), start=1):
+            for i, v_path in enumerate(iter_video_files(source_dir_path), start=1):
                 # Report start
                 if client_id:
                      await manager.send_personal_message({
@@ -840,7 +933,7 @@ async def process_videos(
                     await report_progress(_name, p)
 
                 success, msg, out_path = await video_processor.process_video(
-                    v_path, Path(output_dir), target_format, quality, width, height, remove_audio,
+                    v_path, output_dir_path, target_format, quality, width, height, remove_audio,
                     strip_metadata=strip_metadata,
                     progress_callback=file_progress
                 )
@@ -915,7 +1008,7 @@ async def process_videos(
                         await report_progress(_name, p)
 
                     success, msg, out_path = await video_processor.process_video(
-                        temp_path, Path(output_dir), target_format, quality, width, height, remove_audio,
+                        temp_path, output_dir_path, target_format, quality, width, height, remove_audio,
                         strip_metadata=strip_metadata,
                         progress_callback=file_progress
                     )
@@ -945,6 +1038,6 @@ async def process_videos(
         return {"status": "success", "processed_count": len(results), "results": results}
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error in process_videos: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error in process_videos")
+        raise HTTPException(status_code=500, detail="Erro interno ao processar vídeos")

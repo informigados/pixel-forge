@@ -19,8 +19,8 @@ def find_free_port(start_port=8000, max_port=8100):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 # Tenta ligar na porta para ver se está disponível
-                # Usamos 0.0.0.0 para garantir que está livre em todas as interfaces
-                s.bind(('0.0.0.0', port))
+                # Verifica disponibilidade apenas na interface local para manter o escopo do app em loopback.
+                s.bind(('127.0.0.1', port))
                 return port
             except OSError:
                 continue

@@ -262,6 +262,34 @@ def test_open_location_windows_file_uses_select_flag(client, project_root, monke
     assert str(target_file.resolve()) in popen_calls[0][1]
 
 
+def test_open_location_internal_error_does_not_leak_exception_details(client, project_root, monkeypatch):
+    target_file = project_root / "output" / "images" / "safe-open-error.txt"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    target_file.write_text("ok", encoding="utf-8")
+
+    def fake_popen(*args, **kwargs):
+        raise RuntimeError("segredo-interno")
+
+    monkeypatch.setattr("app.main.subprocess.Popen", fake_popen)
+
+    response = client.post("/open-location", json={"path": str(target_file.resolve())})
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Erro interno ao abrir localização"
+    assert "segredo-interno" not in response.text
+
+
+def test_update_config_internal_error_does_not_leak_exception_details(client, monkeypatch):
+    def fake_save_config(*args, **kwargs):
+        raise RuntimeError("segredo-config")
+
+    monkeypatch.setattr("app.main.save_config", fake_save_config)
+
+    response = client.post("/config", json={"output_dir": "output/images"})
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Erro interno ao atualizar configuração"
+    assert "segredo-config" not in response.text
+
+
 def test_websocket_endpoint_accepts_connection(client):
     with client.websocket_connect("/ws/test-client", headers={"host": "localhost"}) as websocket:
         websocket.send_text("ping")
