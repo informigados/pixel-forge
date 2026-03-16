@@ -90,7 +90,7 @@ if __name__ == "__main__":
     reload_enabled = os.getenv("PIXEL_FORGE_DEV_RELOAD", "").strip().lower() in {"1", "true", "yes", "on"}
     
     print("===================================================")
-    print("  Pixel Forge - Equipe INformigados")
+    print("  Pixel Forge - Equipe Informigados")
     print("  Iniciando sistema de forma inteligente...")
     print(f"  Porta selecionada: {port}")
     print(f"  Acesse: {url}")

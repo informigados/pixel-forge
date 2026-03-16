@@ -69,11 +69,18 @@ def ensure_directory(path_str: str | Path) -> Path:
     return directory
 
 
+def _is_visible_relative_path(path: Path) -> bool:
+    return all(part and not part.startswith(".") for part in path.parts)
+
+
 def iter_image_files(root_dir: str | Path) -> Iterator[Path]:
     directory = normalize_path(root_dir)
     if not directory.exists() or not directory.is_dir():
         raise ValueError("Diretório de origem inválido")
     for path in directory.rglob("*"):
+        relative = path.relative_to(directory)
+        if not _is_visible_relative_path(relative):
+            continue
         if path.is_file() and is_supported_image_extension(path.name):
             yield path
 
@@ -83,6 +90,9 @@ def iter_video_files(root_dir: str | Path) -> Iterator[Path]:
     if not directory.exists() or not directory.is_dir():
         raise ValueError("Diretório de origem inválido")
     for path in directory.rglob("*"):
+        relative = path.relative_to(directory)
+        if not _is_visible_relative_path(relative):
+            continue
         if path.is_file() and is_supported_video_extension(path.name):
             yield path
 

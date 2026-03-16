@@ -20,6 +20,9 @@ def _make_transparent_png_bytes() -> bytes:
     return buf.getvalue()
 
 
+SENTINEL_LOOP_WAIT_SECONDS = 2.8
+
+
 def test_process_without_files_returns_400(client):
     response = client.post(
         "/process",
@@ -146,6 +149,19 @@ def test_register_allowed_root_missing_directory_does_not_expand_to_parent(tmp_p
         with main_module.ALLOWED_PATHS_LOCK:
             main_module.ALLOWED_PATH_ROOTS.clear()
             main_module.ALLOWED_PATH_ROOTS.update(original_roots)
+
+
+def test_validate_directory_input_allows_new_nested_output_path(tmp_path):
+    import app.main as main_module
+
+    target = tmp_path / "nested" / "output" / "images"
+    validated = main_module._validate_directory_input(
+        target,
+        field_name="Pasta de destino",
+        must_exist=False,
+    )
+
+    assert validated == target.resolve()
 
 
 def test_select_folder_returns_error_details_when_dialog_fails(client, monkeypatch):
@@ -382,7 +398,7 @@ def test_sentinel_video_processing_works_with_three_return_values(monkeypatch, t
 
     async def _run_once():
         task = asyncio.create_task(main_module.sentinel_loop())
-        await asyncio.sleep(2.8)
+        await asyncio.sleep(SENTINEL_LOOP_WAIT_SECONDS)
         task.cancel()
         with suppress(asyncio.CancelledError):
             _ = await task

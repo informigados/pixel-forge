@@ -34,6 +34,7 @@ except AttributeError:  # Pillow < 9.1
 
 
 ALPHA_SUPPORTED_FORMATS = {"PNG", "WEBP", "AVIF", "TIFF", "ICO"}
+SUPPORTED_TARGET_FORMATS = {"JPEG", "PNG", "WEBP", "BMP", "TIFF", "ICO", "AVIF"}
 
 
 class ImageProcessingError(Exception):
@@ -44,10 +45,18 @@ class ImageProcessingError(Exception):
 
 def _normalize_target_format(target_format: str) -> str:
     fmt = target_format.upper()
-    return "JPEG" if fmt == "JPG" else fmt
+    if fmt == "JPG":
+        return "JPEG"
+    if fmt == "TIF":
+        return "TIFF"
+    return fmt
 
 
 def _ensure_target_format_supported(target_format_upper: str) -> None:
+    if target_format_upper not in SUPPORTED_TARGET_FORMATS:
+        raise ImageProcessingError(
+            f"Formato de saída não suportado: {target_format_upper.lower()}"
+        )
     if target_format_upper == "AVIF" and not AVIF_PLUGIN_AVAILABLE:
         raise ImageProcessingError(
             "Formato AVIF indisponível: plugin pillow-avif-plugin não encontrado"

@@ -1,6 +1,7 @@
+import pytest
 from PIL import Image
 
-from app.image_processor import process_single_image
+from app.image_processor import ImageProcessingError, process_single_image
 from app.utils import iter_image_files, iter_video_files
 
 
@@ -43,3 +44,82 @@ def test_iterators_only_return_supported_files(tmp_path):
 
     assert image_names == ["a.png", "b.jpg"]
     assert video_names == ["sample.mp4"]
+
+
+def test_iterators_handle_nested_directories_and_ignore_hidden_files(tmp_path):
+    root = tmp_path / "source"
+    nested = root / "nested"
+    deeper = nested / "deeper"
+    hidden_dir = root / ".private"
+    root.mkdir()
+    nested.mkdir()
+    deeper.mkdir()
+    hidden_dir.mkdir()
+
+    Image.new("RGB", (10, 10), color=(1, 2, 3)).save(root / "a.png")
+    Image.new("RGB", (10, 10), color=(4, 5, 6)).save(nested / "b.jpg")
+    Image.new("RGB", (10, 10), color=(7, 8, 9)).save(deeper / "c.webp")
+    Image.new("RGB", (10, 10), color=(9, 8, 7)).save(root / ".hidden.png")
+    Image.new("RGB", (10, 10), color=(3, 2, 1)).save(hidden_dir / "hidden-dir.png")
+    (root / "sample.mp4").write_bytes(b"fake")
+    (nested / "clip.mov").write_bytes(b"fake-mov")
+    (root / ".hidden.mp4").write_bytes(b"fake-hidden")
+    (hidden_dir / "secret.webm").write_bytes(b"fake-secret")
+
+    image_names = sorted(path.relative_to(root).as_posix() for path in iter_image_files(root))
+    video_names = sorted(path.relative_to(root).as_posix() for path in iter_video_files(root))
+
+    assert image_names == ["a.png", "nested/b.jpg", "nested/deeper/c.webp"]
+    assert video_names == ["nested/clip.mov", "sample.mp4"]
+
+
+def test_process_single_image_raises_for_missing_source(tmp_path):
+    missing_source = tmp_path / "does_not_exist.png"
+
+    with pytest.raises(ImageProcessingError, match="origem inexistente"):
+        process_single_image(
+            source_path=missing_source,
+            output_dir=str(tmp_path / "out"),
+            target_format="jpg",
+            quality=80,
+            width=None,
+            height=None,
+            strip_metadata=True,
+        )
+
+
+def test_process_single_image_raises_for_unsupported_target_format(tmp_path):
+    source = tmp_path / "input.png"
+    Image.new("RGB", (40, 40), color=(10, 20, 30)).save(source)
+
+    with pytest.raises(ImageProcessingError, match="Formato de saída não suportado"):
+        process_single_image(
+            source_path=source,
+            output_dir=str(tmp_path / "out"),
+            target_format="heic",
+            quality=80,
+            width=None,
+            height=None,
+            strip_metadata=True,
+        )
+
+
+def test_process_single_image_surfaces_output_permission_errors(tmp_path, monkeypatch):
+    source = tmp_path / "input.png"
+    Image.new("RGB", (40, 40), color=(10, 20, 30)).save(source)
+
+    def fake_ensure_directory(_path):
+        raise PermissionError("sem permissão")
+
+    monkeypatch.setattr("app.image_processor.ensure_directory", fake_ensure_directory)
+
+    with pytest.raises(PermissionError, match="sem permissão"):
+        process_single_image(
+            source_path=source,
+            output_dir=str(tmp_path / "blocked"),
+            target_format="jpg",
+            quality=80,
+            width=None,
+            height=None,
+            strip_metadata=True,
+        )

@@ -172,8 +172,13 @@ def _validate_directory_input(
         if not candidate.exists() or not candidate.is_dir():
             raise HTTPException(status_code=400, detail=f"{field_name} inválido")
     else:
-        parent = candidate if candidate.exists() else candidate.parent
-        if not parent.exists() or not parent.is_dir():
+        current = candidate
+        while not current.exists():
+            parent = current.parent
+            if parent == current:
+                raise HTTPException(status_code=400, detail=f"{field_name} inválido")
+            current = parent
+        if not current.is_dir():
             raise HTTPException(status_code=400, detail=f"{field_name} inválido")
     return candidate
 
