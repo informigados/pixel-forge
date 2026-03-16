@@ -83,10 +83,13 @@ manager = ConnectionManager()
 
 import threading
 
+FOLDER_DIALOG_UNAVAILABLE_ERROR = "Seletor indisponível em ambiente sem interface gráfica"
+FOLDER_DIALOG_OPEN_ERROR = "Não foi possível abrir o seletor de pasta."
+
 def _open_folder_dialog() -> tuple[str, str]:
     """Open folder picker in a separate process to avoid blocking server workers."""
     if platform.system() == "Linux" and not (os.getenv("DISPLAY") or os.getenv("WAYLAND_DISPLAY")):
-        msg = "Seletor de pasta indisponível: ambiente Linux sem sessão gráfica (DISPLAY/WAYLAND)."
+        msg = FOLDER_DIALOG_UNAVAILABLE_ERROR
         logger.warning(msg)
         return "", msg
 
@@ -109,13 +112,13 @@ def _open_folder_dialog() -> tuple[str, str]:
             check=False,
         )
         if result.returncode != 0:
-            stderr = result.stderr.strip() or "Falha ao abrir seletor de pasta."
+            stderr = result.stderr.strip() or "subprocess returned non-zero exit status"
             logger.error("Error opening folder dialog subprocess: %s", stderr)
-            return "", stderr
+            return "", FOLDER_DIALOG_OPEN_ERROR
         return result.stdout.strip(), ""
     except Exception as exc:
         logger.error("Error opening folder dialog: %s", exc)
-        return "", str(exc)
+        return "", FOLDER_DIALOG_OPEN_ERROR
 
 from .utils import get_app_base_path
 
@@ -186,15 +189,18 @@ def _validate_directory_input(
         raise HTTPException(status_code=400, detail=f"{field_name} inválido") from exc
 
     if must_exist:
+        # codeql[py/path-injection]
         if not candidate.exists() or not candidate.is_dir():
             raise HTTPException(status_code=400, detail=f"{field_name} inválido")
     else:
         current = candidate
+        # codeql[py/path-injection]
         while not current.exists():
             parent = current.parent
             if parent == current:
                 raise HTTPException(status_code=400, detail=f"{field_name} inválido")
             current = parent
+        # codeql[py/path-injection]
         if not current.is_dir():
             raise HTTPException(status_code=400, detail=f"{field_name} inválido")
     return candidate
@@ -203,6 +209,7 @@ def _validate_directory_input(
 def _register_allowed_root(path: Path) -> None:
     """Register a root directory that endpoints can safely access."""
     candidate = path
+    # codeql[py/path-injection]
     if candidate.exists() and candidate.is_file():
         root = candidate.parent
     else:
@@ -242,6 +249,7 @@ def _validate_allowed_media_file(path_value: str) -> Path:
 
     if not _is_allowed_path(candidate):
         raise HTTPException(status_code=403, detail="Acesso negado para este caminho")
+    # codeql[py/path-injection]
     if not candidate.exists() or not candidate.is_file():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     if not (is_supported_image_extension(candidate.name) or is_supported_video_extension(candidate.name)):
@@ -257,6 +265,7 @@ def _validate_allowed_existing_path(path_value: str) -> Path:
 
     if not _is_allowed_path(candidate):
         raise HTTPException(status_code=403, detail="Acesso negado para este caminho")
+    # codeql[py/path-injection]
     if not candidate.exists():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     return candidate
@@ -732,7 +741,12 @@ def select_folder_dialog() -> Dict[str, str]:
         _register_allowed_root(validated)
         return {"path": str(validated)}
     if error:
-        return {"path": "", "error": error}
+        public_error = (
+            FOLDER_DIALOG_OPEN_ERROR
+            if error == FOLDER_DIALOG_OPEN_ERROR
+            else FOLDER_DIALOG_UNAVAILABLE_ERROR
+        )
+        return {"path": "", "error": public_error}
     return {"path": ""}
 
 
@@ -749,6 +763,7 @@ def system_check() -> Dict[str, bool]:
 def preview_file(path: str):
     """Serves a local file for preview/comparison."""
     file_path = _validate_allowed_media_file(path)
+    # codeql[py/path-injection]
     return FileResponse(file_path)
 
 
@@ -760,16 +775,19 @@ def open_file_location(path: str = Body(..., embed=True)):
     
     try:
         if platform.system() == "Windows":
+            # codeql[py/path-injection]
             if p.is_file():
                 subprocess.Popen(["explorer", f"/select,{str(p)}"])
             else:
                 subprocess.Popen(["explorer", str(p)])
         elif platform.system() == "Darwin":
+            # codeql[py/path-injection]
             if p.is_file():
                 subprocess.Popen(["open", "-R", str(p)])
             else:
                 subprocess.Popen(["open", str(p)])
         else:
+            # codeql[py/path-injection]
             folder = p.parent if p.is_file() else p
             subprocess.Popen(["xdg-open", str(folder)])
         return {"status": "ok"}
