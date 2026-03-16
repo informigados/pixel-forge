@@ -1,15 +1,24 @@
 import shutil
-import subprocess
+import asyncio
+import json
 import logging
+import platform
+import re
+import shutil
+import subprocess
 import traceback
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Callable
-import json
-import asyncio
-import re
-from .utils import ensure_directory, is_supported_video_extension, normalize_path, get_app_base_path, sanitize_filename, to_windows_long_path
+from typing import Callable, Dict, List, Optional, Tuple
+
+from .utils import ensure_directory, get_app_base_path, sanitize_filename, to_windows_long_path
 
 logger = logging.getLogger("pixelforge")
+
+
+def _get_subprocess_creationflags() -> int:
+    if platform.system() != "Windows":
+        return 0
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 class VideoProcessor:
     def __init__(self):
@@ -33,10 +42,10 @@ class VideoProcessor:
         if not self.ffmpeg_path:
             logger.warning("FFmpeg não encontrado no PATH do sistema. Processamento de vídeo não funcionará.")
         else:
-            logger.info(f"FFmpeg encontrado em: {self.ffmpeg_path}")
+            logger.info("FFmpeg encontrado em: %s", self.ffmpeg_path)
             
         if self.ffprobe_path:
-            logger.info(f"FFprobe encontrado em: {self.ffprobe_path}")
+            logger.info("FFprobe encontrado em: %s", self.ffprobe_path)
 
     def check_ffmpeg(self) -> bool:
         return self.ffmpeg_path is not None
@@ -62,16 +71,25 @@ class VideoProcessor:
                 cmd,
                 capture_output=True,
                 text=True,
-                encoding='utf-8'
+                encoding='utf-8',
+                creationflags=_get_subprocess_creationflags(),
             )
             
             if result.returncode != 0:
-                logger.error(f"Erro ao ler metadados (código {result.returncode}): {result.stderr}")
+                logger.error(
+                    "Erro ao ler metadados (código %s): %s",
+                    result.returncode,
+                    result.stderr,
+                )
                 return {}
                 
             return json.loads(result.stdout)
-        except Exception as e:
-            logger.error(f"Falha ao obter metadados (sync): {repr(e)}\n{traceback.format_exc()}")
+        except Exception as exc:
+            logger.error(
+                "Falha ao obter metadados (sync): %r\n%s",
+                exc,
+                traceback.format_exc(),
+            )
             return {}
 
     async def get_video_metadata(self, file_path: Path) -> Dict:
@@ -86,7 +104,7 @@ class VideoProcessor:
     ) -> Tuple[bool, str, Optional[str]]:
         """Sync implementation of process_video using subprocess.Popen"""
         try:
-            logger.info(f"Iniciando conversão (sync): {' '.join(cmd)}")
+            logger.info("Iniciando conversão (sync): %s", " ".join(cmd))
             
             # Using Popen for real-time output reading
             # On Windows, we need to be careful with creationflags if needed, but usually defaults work
@@ -96,7 +114,8 @@ class VideoProcessor:
                 stderr=subprocess.PIPE,
                 universal_newlines=True, # Text mode
                 encoding='utf-8',
-                errors='ignore'
+                errors='ignore',
+                creationflags=_get_subprocess_creationflags(),
             )
             
             time_pattern = re.compile(r"time=(\d{2}):(\d{2}):(\d{2}\.\d{2})")
@@ -134,7 +153,7 @@ class VideoProcessor:
             
             if returncode != 0:
                 error_details = "\n".join(stderr_lines)
-                logger.error(f"Erro FFmpeg (sync): {error_details}")
+                logger.error("Erro FFmpeg (sync): %s", error_details)
                 return False, f"Erro na conversão: {stderr_lines[-1] if stderr_lines else 'Erro desconhecido'}", None
 
             if progress_callback_sync:
@@ -142,9 +161,13 @@ class VideoProcessor:
 
             return True, f"Vídeo processado com sucesso: {output_path.name}", str(output_path)
             
-        except Exception as e:
-             logger.error(f"Erro interno no processamento de vídeo (sync): {repr(e)}\n{traceback.format_exc()}")
-             return False, f"Erro interno: {str(e)}", None
+        except Exception as exc:
+             logger.error(
+                 "Erro interno no processamento de vídeo (sync): %r\n%s",
+                 exc,
+                 traceback.format_exc(),
+             )
+             return False, f"Erro interno: {str(exc)}", None
 
     async def process_video(
         self,
@@ -238,7 +261,7 @@ class VideoProcessor:
 
             cmd.append(output_path_str)
             
-            logger.info(f"Comando FFmpeg construído: {cmd}")
+            logger.info("Comando FFmpeg construído: %s", cmd)
 
             # Prepare callback for sync execution
             loop = asyncio.get_running_loop()
@@ -257,8 +280,12 @@ class VideoProcessor:
                 sync_callback_wrapper
             )
 
-        except Exception as e:
-            logger.error(f"Erro interno no processamento de vídeo: {repr(e)}\n{traceback.format_exc()}")
-            return False, f"Erro interno: {str(e)}", None
+        except Exception as exc:
+            logger.error(
+                "Erro interno no processamento de vídeo: %r\n%s",
+                exc,
+                traceback.format_exc(),
+            )
+            return False, f"Erro interno: {str(exc)}", None
 
 video_processor = VideoProcessor()

@@ -24,7 +24,7 @@ def _make_transparent_png_bytes() -> bytes:
 
 TEST_SENTINEL_WAIT_SECONDS = 0.05
 ERROR_NO_FILE_SENT = "Nenhum arquivo enviado"
-ERROR_INVALID_MODE = "Modo inválido"
+ERROR_INVALID_CLIENT_ID = "client_id inválido"
 MINIMAL_MP4_BYTES = (
     b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"
 )
@@ -64,8 +64,7 @@ def test_process_invalid_mode_returns_400(client):
             "quality": "80",
         },
     )
-    assert response.status_code == 400
-    assert response.json()["detail"] == ERROR_INVALID_MODE
+    assert response.status_code == 422
 
 
 def test_image_upload_process_and_preview(client):
@@ -119,6 +118,32 @@ def test_process_video_folder_empty_is_success(client):
         assert payload["status"] == "success"
         assert payload["processed_count"] == 0
         assert payload["results"] == []
+
+
+def test_cors_allows_local_dev_ports_in_supported_range(client):
+    response = client.options(
+        "/process",
+        headers={
+            "origin": "http://localhost:8005",
+            "access-control-request-method": "POST",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:8005"
+    assert response.headers["access-control-allow-credentials"] == "true"
+
+
+def test_cors_rejects_ports_outside_supported_range(client):
+    response = client.options(
+        "/process",
+        headers={
+            "origin": "http://localhost:8101",
+            "access-control-request-method": "POST",
+        },
+    )
+
+    assert "access-control-allow-origin" not in response.headers
 
 
 def test_preview_blocks_non_allowed_path(client, project_root):
@@ -185,6 +210,20 @@ def test_select_folder_returns_error_details_when_dialog_fails(client, monkeypat
     assert "indisponível" in payload["error"]
 
 
+def test_process_rejects_invalid_image_target_format(client):
+    response = client.post(
+        "/process",
+        data={
+            "mode": "upload",
+            "output_dir": "output/images",
+            "target_format": "gif",
+            "quality": "80",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_image_upload_file_count_limit_returns_413(client, monkeypatch):
     monkeypatch.setattr("app.main.MAX_IMAGE_UPLOAD_FILES", 1)
     image_bytes = _make_png_bytes()
@@ -225,6 +264,20 @@ def test_video_upload_file_count_limit_returns_413(client, monkeypatch):
     assert "limite de 1" in response.json()["detail"]
 
 
+def test_process_video_rejects_invalid_target_format(client):
+    response = client.post(
+        "/process-video",
+        data={
+            "mode": "upload",
+            "output_dir": "output/videos",
+            "target_format": "ogv",
+            "quality": "80",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_process_transparent_png_to_jpg_uses_white_background(client):
     image_data = _make_transparent_png_bytes()
     with tempfile.TemporaryDirectory() as td:
@@ -258,6 +311,50 @@ def test_config_rejects_unknown_keys(client):
 def test_config_rejects_invalid_quality_type(client):
     response = client.post("/config", json={"quality": "../../etc/passwd"})
     assert response.status_code == 422
+
+
+def test_load_config_uses_cache_until_file_mtime_changes(monkeypatch):
+    import app.main as main_module
+
+    class FakeConfigFile:
+        def __init__(self, text, mtime_ns):
+            self._text = text
+            self._mtime_ns = mtime_ns
+            self.read_count = 0
+
+        def exists(self):
+            return True
+
+        def stat(self):
+            return type("Stat", (), {"st_mtime_ns": self._mtime_ns})()
+
+        def read_text(self, encoding="utf-8"):
+            self.read_count += 1
+            return self._text
+
+    fake_file = FakeConfigFile('{"output_dir": "output/images"}', 1)
+    monkeypatch.setattr(main_module, "CONFIG_FILE", fake_file)
+
+    old_cache_data = main_module.CONFIG_CACHE_DATA
+    old_cache_mtime = main_module.CONFIG_CACHE_MTIME_NS
+    main_module.CONFIG_CACHE_DATA = None
+    main_module.CONFIG_CACHE_MTIME_NS = None
+
+    try:
+        first = main_module.load_config()
+        second = main_module.load_config()
+
+        fake_file._text = '{"output_dir": "output/videos"}'
+        fake_file._mtime_ns = 2
+        third = main_module.load_config()
+    finally:
+        main_module.CONFIG_CACHE_DATA = old_cache_data
+        main_module.CONFIG_CACHE_MTIME_NS = old_cache_mtime
+
+    assert first["output_dir"] == "output/images"
+    assert second["output_dir"] == "output/images"
+    assert third["output_dir"] == "output/videos"
+    assert fake_file.read_count == 2
 
 
 def test_open_location_windows_file_uses_select_flag(client, project_root, monkeypatch):
@@ -298,6 +395,30 @@ def test_open_location_internal_error_does_not_leak_exception_details(client, pr
     assert "segredo-interno" not in response.text
 
 
+def test_lifespan_cleans_temp_directories_in_worker_threads(monkeypatch):
+    import app.main as main_module
+
+    calls = []
+
+    async def fake_to_thread(func, *args, **kwargs):
+        calls.append((func, args, kwargs))
+        return None
+
+    monkeypatch.setattr(main_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(main_module, "load_config", lambda: main_module.default_config())
+    monkeypatch.setattr(main_module, "_read_bool_env", lambda *args, **kwargs: True)
+
+    async def run_lifespan():
+        async with main_module.lifespan(main_module.app):
+            return None
+
+    asyncio.run(run_lifespan())
+
+    cleaned_dirs = [args[0] for func, args, _kwargs in calls if func is main_module._cleanup_temp_directory]
+    assert main_module.STATIC_DIR / "temp_compare" in cleaned_dirs
+    assert main_module.BASE_DIR / "temp_uploads" in cleaned_dirs
+
+
 def test_update_config_internal_error_does_not_leak_exception_details(client, monkeypatch):
     def fake_save_config(*args, **kwargs):
         raise RuntimeError("segredo-config")
@@ -315,6 +436,22 @@ def test_websocket_endpoint_accepts_connection(client):
         websocket.send_text("ping")
         assert websocket is not None
         websocket.close()
+
+
+def test_process_rejects_invalid_client_id(client):
+    response = client.post(
+        "/process",
+        data={
+            "mode": "upload",
+            "output_dir": "output/images",
+            "target_format": "webp",
+            "quality": "80",
+            "client_id": "cliente com espacos",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == ERROR_INVALID_CLIENT_ID
 
 
 def test_websocket_receives_image_progress_for_folder_processing(client):
@@ -346,6 +483,47 @@ def test_websocket_receives_image_progress_for_folder_processing(client):
             assert ws_msg["category"] == "images"
             assert ws_msg["file"] == "progress.png"
             assert isinstance(ws_msg["percent"], int)
+
+
+def test_process_video_folder_iterates_source_only_once(client, monkeypatch, tmp_path):
+    import app.main as main_module
+
+    source_dir = tmp_path / "videos"
+    output_dir = tmp_path / "out"
+    source_dir.mkdir()
+    output_dir.mkdir()
+    (source_dir / "clip.mp4").write_bytes(MINIMAL_MP4_BYTES)
+
+    original_iter = main_module.iter_video_files
+    call_count = 0
+
+    def counting_iter(root_dir):
+        nonlocal call_count
+        call_count += 1
+        return original_iter(root_dir)
+
+    async def fake_process_video(file_path, out_dir, *args, **kwargs):
+        processed_path = Path(out_dir) / file_path.name
+        processed_path.write_bytes(b"processed")
+        return True, "ok", str(processed_path)
+
+    monkeypatch.setattr(main_module, "iter_video_files", counting_iter)
+    monkeypatch.setattr(main_module.video_processor, "process_video", fake_process_video)
+
+    response = client.post(
+        "/process-video",
+        data={
+            "mode": "folder",
+            "source_dir": str(source_dir),
+            "output_dir": str(output_dir),
+            "target_format": "mp4",
+            "quality": "80",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["processed_count"] == 1
+    assert call_count == 1
 
 
 def test_log_future_exception_records_background_failures(caplog):
@@ -473,5 +651,28 @@ def test_process_request_mode_accepts_only_upload_or_folder():
             mode="invalid",
             output_dir="output/images",
             target_format="webp",
+            quality=80,
+        )
+
+
+def test_video_process_request_mode_accepts_only_upload_or_folder():
+    from pydantic import ValidationError
+
+    from app.main import VideoProcessRequest
+
+    valid = VideoProcessRequest(
+        mode="folder",
+        source_dir="output/videos",
+        output_dir="output/videos",
+        target_format="mp4",
+        quality=80,
+    )
+    assert valid.mode == "folder"
+
+    with pytest.raises(ValidationError):
+        VideoProcessRequest(
+            mode="invalid",
+            output_dir="output/videos",
+            target_format="mp4",
             quality=80,
         )

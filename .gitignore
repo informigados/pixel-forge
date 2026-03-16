@@ -42,6 +42,7 @@ build/
 dist/
 *.spec
 *.egg-info/
+node_modules/
 
 # Project runtime artifacts
 config.json

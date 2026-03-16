@@ -1,14 +1,18 @@
+import argparse
 import os
-import socket
 import shutil
-import webbrowser
+import socket
+import sys
 import threading
 import time
+import webbrowser
+
 import uvicorn
-import sys
 from pathlib import Path
 
 from setup_ffmpeg import download_ffmpeg
+
+MIN_PYTHON_VERSION = (3, 10)
 
 def find_free_port(start_port=8000, max_port=8100):
     """
@@ -73,9 +77,47 @@ def ensure_ffmpeg_available() -> bool:
     print("Execute setup_ffmpeg.py manualmente ou instale FFmpeg no PATH.")
     return False
 
-if __name__ == "__main__":
+
+def ensure_supported_python_version(version_info=None) -> bool:
+    current = version_info or sys.version_info
+    current_version = tuple(current[:2]) if not hasattr(current, "major") else (current.major, current.minor)
+    if current_version >= MIN_PYTHON_VERSION:
+        return True
+
+    if hasattr(current, "major"):
+        detected = f"{current.major}.{current.minor}.{getattr(current, 'micro', 0)}"
+    else:
+        detected = ".".join(str(part) for part in current[:3])
+
+    print(
+        "Erro: Python "
+        f"{MIN_PYTHON_VERSION[0]}.{MIN_PYTHON_VERSION[1]}+ e obrigatorio. "
+        f"Versao detectada: {detected}"
+    )
+    return False
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Bootstrap do Pixel Forge.")
+    parser.add_argument("--check-python", action="store_true", help="Verifica se a versao do Python e suportada.")
+    parser.add_argument("--check-ffmpeg", action="store_true", help="Verifica se FFmpeg/FFprobe estao disponiveis.")
+    return parser
+
+
+def main(argv=None) -> int:
+    args = _build_arg_parser().parse_args(argv)
+
+    if args.check_python or args.check_ffmpeg:
+        if args.check_python and not ensure_supported_python_version():
+            return 1
+        if args.check_ffmpeg and not ensure_ffmpeg_available():
+            return 1
+        return 0
+
+    if not ensure_supported_python_version():
+        return 1
     if not ensure_ffmpeg_available():
-        sys.exit(1)
+        return 1
 
     # Tenta encontrar uma porta livre
     port = find_free_port()
@@ -110,3 +152,9 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nErro ao iniciar o servidor: {e}")
         input("Pressione Enter para sair...")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

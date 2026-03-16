@@ -1,20 +1,23 @@
 import shutil
 import time
 from concurrent.futures import CancelledError as ConcurrentCancelledError, Future
+from enum import StrEnum
 from functools import partial
 from pathlib import Path
 import logging
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
+import threading
 from contextlib import asynccontextmanager, suppress
 
 import asyncio
 from typing import Any, Awaitable, Callable, Coroutine, Dict, List, Literal, Optional, Set
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile, Request, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -31,6 +34,7 @@ logger = logging.getLogger("pixelforge")
 from .image_processor import process_directory, process_single_image, get_file_size_str, is_avif_available
 from .video_processor import video_processor
 from .utils import (
+    get_app_base_path,
     is_supported_video_extension,
     is_supported_image_extension,
     iter_video_files,
@@ -49,6 +53,34 @@ class SentinelVideoProcessingError(Exception):
     semantics may differ because files might already have been relocated.
     """
 
+
+class RequestMode(StrEnum):
+    UPLOAD = "upload"
+    FOLDER = "folder"
+
+
+class ImageTargetFormat(StrEnum):
+    JPG = "jpg"
+    JPEG = "jpeg"
+    PNG = "png"
+    WEBP = "webp"
+    BMP = "bmp"
+    TIF = "tif"
+    TIFF = "tiff"
+    ICO = "ico"
+    AVIF = "avif"
+
+
+class VideoTargetFormat(StrEnum):
+    MP4 = "mp4"
+    MP4_HEVC = "mp4_hevc"
+    MKV = "mkv"
+    MOV = "mov"
+    WEBM = "webm"
+    WMV = "wmv"
+    FLV = "flv"
+    AVI = "avi"
+
 # --- WebSocket Manager ---
 class ConnectionManager:
     def __init__(self):
@@ -66,8 +98,8 @@ class ConnectionManager:
         if client_id in self.active_connections:
             try:
                 await self.active_connections[client_id].send_json(message)
-            except Exception as e:
-                logger.error(f"Error sending WS message to {client_id}: {e}")
+            except Exception as exc:
+                logger.error("Error sending WS message to %s: %s", client_id, exc)
                 self.disconnect(client_id)
 
     async def broadcast(self, message: dict):
@@ -80,8 +112,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 # -------------------------
-
-import threading
 
 FOLDER_DIALOG_UNAVAILABLE_ERROR = "Seletor indisponível em ambiente sem interface gráfica"
 FOLDER_DIALOG_OPEN_ERROR = "Não foi possível abrir o seletor de pasta."
@@ -120,8 +150,6 @@ def _open_folder_dialog() -> tuple[str, str]:
         logger.error("Error opening folder dialog: %s", exc)
         return "", FOLDER_DIALOG_OPEN_ERROR
 
-from .utils import get_app_base_path
-
 BASE_DIR = get_app_base_path()
 STATIC_DIR = BASE_DIR / "static"
 INDEX_FILE = STATIC_DIR / "index.html"
@@ -130,6 +158,9 @@ CONFIG_FILE = BASE_DIR / "config.json"
 # These paths live only in memory during runtime and are rebuilt on app startup.
 ALLOWED_PATH_ROOTS: Set[Path] = set()
 ALLOWED_PATHS_LOCK = threading.Lock()
+CONFIG_CACHE_LOCK = threading.Lock()
+CONFIG_CACHE_MTIME_NS: Optional[int] = None
+CONFIG_CACHE_DATA: Optional[Dict[str, Any]] = None
 
 
 def _read_int_env(name: str, default: int) -> int:
@@ -161,6 +192,43 @@ SENTINEL_RECENT_TTL_SECONDS = _read_int_env("PIXEL_FORGE_SENTINEL_RECENT_TTL_SEC
 SENTINEL_FILE_STABILITY_SECONDS = 1
 SENTINEL_IDLE_POLL_SECONDS = 5
 SENTINEL_ACTIVE_POLL_SECONDS = 2
+LOCAL_DEV_PORT_RANGE = range(8000, 8101)
+CLIENT_ID_MAX_LENGTH = 64
+CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+CLIENT_ID_ERROR_DETAIL = "client_id inválido"
+
+
+def _build_local_dev_origins() -> List[str]:
+    origins: List[str] = []
+    for scheme in ("http", "https"):
+        for host in ("localhost", "127.0.0.1"):
+            for port in LOCAL_DEV_PORT_RANGE:
+                origins.append(f"{scheme}://{host}:{port}")
+    return origins
+
+
+LOCAL_DEV_ALLOWED_ORIGINS = _build_local_dev_origins()
+
+
+def _normalize_client_id_value(client_id: Optional[str]) -> Optional[str]:
+    if client_id is None:
+        return None
+
+    normalized = client_id.strip()
+    if not normalized:
+        return None
+    if len(normalized) > CLIENT_ID_MAX_LENGTH:
+        raise ValueError("client_id too long")
+    if not CLIENT_ID_PATTERN.fullmatch(normalized):
+        raise ValueError("client_id contains unsupported characters")
+    return normalized
+
+
+def _validate_optional_client_id(client_id: Optional[str]) -> Optional[str]:
+    try:
+        return _normalize_client_id_value(client_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=CLIENT_ID_ERROR_DETAIL) from exc
 
 
 def _normalize_path_string(path_value: str | Path) -> Path:
@@ -308,6 +376,27 @@ def _cleanup_temp_directory(directory: Path, max_age_seconds: int, max_files: in
             stale.unlink(missing_ok=True)
         except Exception as exc:
             logger.warning("Falha ao remover excesso de temporários %s: %s", stale, exc)
+
+
+def _get_config_mtime_ns() -> Optional[int]:
+    if not CONFIG_FILE.exists():
+        return None
+    try:
+        return CONFIG_FILE.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def _read_config_from_disk() -> Dict[str, Any]:
+    if not CONFIG_FILE.exists():
+        return default_config()
+    try:
+        raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+        config = default_config()
+        config.update({k: raw.get(k, v) for k, v in config.items()})
+        return config
+    except Exception:
+        return default_config()
 
 # --- Sentinel Background Task ---
 sentinel_task: Optional[asyncio.Task] = None
@@ -549,7 +638,7 @@ async def sentinel_loop():
                 if not await _check_file_stability(file_path, SENTINEL_FILE_STABILITY_SECONDS):
                     continue
 
-                logger.info(f"Sentinel detected: {file_path}")
+                logger.info("Sentinel detected: %s", file_path)
                 await _process_sentinel_file(
                     file_path,
                     file_key=file_key,
@@ -560,8 +649,8 @@ async def sentinel_loop():
 
             await asyncio.sleep(SENTINEL_ACTIVE_POLL_SECONDS)
 
-        except Exception as e:
-            logger.error(f"Sentinel loop error: {e}")
+        except Exception as exc:
+            logger.exception("Sentinel loop error")
             await asyncio.sleep(SENTINEL_IDLE_POLL_SECONDS)
 
 
@@ -571,8 +660,20 @@ async def lifespan(_: FastAPI):
     _initialize_allowed_roots()
     (STATIC_DIR / "temp_compare").mkdir(parents=True, exist_ok=True)
     (BASE_DIR / "temp_uploads").mkdir(parents=True, exist_ok=True)
-    _cleanup_temp_directory(STATIC_DIR / "temp_compare", TEMP_FILES_MAX_AGE_SECONDS, TEMP_FILES_MAX_COUNT)
-    _cleanup_temp_directory(BASE_DIR / "temp_uploads", TEMP_FILES_MAX_AGE_SECONDS, TEMP_FILES_MAX_COUNT)
+    await asyncio.gather(
+        asyncio.to_thread(
+            _cleanup_temp_directory,
+            STATIC_DIR / "temp_compare",
+            TEMP_FILES_MAX_AGE_SECONDS,
+            TEMP_FILES_MAX_COUNT,
+        ),
+        asyncio.to_thread(
+            _cleanup_temp_directory,
+            BASE_DIR / "temp_uploads",
+            TEMP_FILES_MAX_AGE_SECONDS,
+            TEMP_FILES_MAX_COUNT,
+        ),
+    )
     config = load_config()
     if config.get("output_dir"):
         try:
@@ -619,7 +720,8 @@ app.add_middleware(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_origins=LOCAL_DEV_ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -634,10 +736,10 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
-        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
-        "font-src 'self' https://cdnjs.cloudflare.com data:; "
-        "img-src 'self' data: blob: https://cdnjs.cloudflare.com; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self' data:; "
+        "img-src 'self' data: blob:; "
         "connect-src 'self' ws: wss:; "
         "object-src 'none'; "
         "base-uri 'self'; "
@@ -673,24 +775,32 @@ def default_config() -> Dict[str, Any]:
 
 
 def load_config() -> Dict[str, Any]:
-    if not CONFIG_FILE.exists():
-        return default_config()
-    try:
-        raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        config = default_config()
-        config.update({k: raw.get(k, v) for k, v in config.items()})
-        return config
-    except Exception:
-        return default_config()
+    global CONFIG_CACHE_DATA, CONFIG_CACHE_MTIME_NS
+
+    mtime_ns = _get_config_mtime_ns()
+    with CONFIG_CACHE_LOCK:
+        if CONFIG_CACHE_DATA is not None and CONFIG_CACHE_MTIME_NS == mtime_ns:
+            return dict(CONFIG_CACHE_DATA)
+
+    config = _read_config_from_disk()
+    with CONFIG_CACHE_LOCK:
+        CONFIG_CACHE_DATA = dict(config)
+        CONFIG_CACHE_MTIME_NS = mtime_ns
+    return dict(config)
 
 
 def save_config(data: Dict[str, Any]) -> None:
+    global CONFIG_CACHE_DATA, CONFIG_CACHE_MTIME_NS
+
     config = load_config()
     allowed_keys = default_config().keys()
     for key in allowed_keys:
         if key in data:
             config[key] = data[key]
     CONFIG_FILE.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    with CONFIG_CACHE_LOCK:
+        CONFIG_CACHE_DATA = dict(config)
+        CONFIG_CACHE_MTIME_NS = _get_config_mtime_ns()
 
 
 @app.get("/")
@@ -708,7 +818,7 @@ def get_config() -> Dict[str, Any]:
 @app.post("/config")
 def update_config(config: ConfigUpdateRequest) -> Dict[str, str]:
     try:
-        payload = config.model_dump(exclude_none=True) if hasattr(config, "model_dump") else config.dict(exclude_none=True)
+        payload = config.model_dump(exclude_none=True)
         for key in ("output_dir", "source_dir", "watch_folder"):
             if key in payload and payload[key]:
                 must_exist = key != "output_dir"
@@ -770,7 +880,7 @@ def preview_file(path: str):
 @app.post("/open-location")
 def open_file_location(path: str = Body(..., embed=True)):
     """Opens the file location in the OS file explorer."""
-    logger.info(f"Opening location for: {path}")
+    logger.info("Opening location for: %s", path)
     p = _validate_allowed_existing_path(path)
     
     try:
@@ -796,58 +906,49 @@ def open_file_location(path: str = Body(..., embed=True)):
         raise HTTPException(status_code=500, detail="Erro interno ao abrir localização")
 
 class ProcessRequest(BaseModel):
-    mode: Literal["upload", "folder"] = "upload"
+    model_config = ConfigDict(extra="forbid")
+    mode: RequestMode = RequestMode.UPLOAD
     source_dir: Optional[str] = None
     output_dir: str
-    target_format: str
-    quality: int
-    width: Optional[int] = None
-    height: Optional[int] = None
+    target_format: ImageTargetFormat
+    quality: int = Field(ge=0, le=100)
+    width: Optional[int] = Field(default=None, ge=1)
+    height: Optional[int] = Field(default=None, ge=1)
     strip_metadata: bool = True
 
 class VideoProcessRequest(BaseModel):
-    mode: str = "upload"
+    model_config = ConfigDict(extra="forbid")
+    mode: RequestMode = RequestMode.UPLOAD
     source_dir: Optional[str] = None
     output_dir: str
-    target_format: str
-    quality: int
-    width: Optional[int] = None
-    height: Optional[int] = None
+    target_format: VideoTargetFormat
+    quality: int = Field(ge=0, le=100)
+    width: Optional[int] = Field(default=None, ge=1)
+    height: Optional[int] = Field(default=None, ge=1)
     remove_audio: bool = False
 
 
 def _resolve_image_request(
-    request: Optional[ProcessRequest],
     *,
-    mode: Optional[str],
-    output_dir: Optional[str],
-    target_format: Optional[str],
-    quality: Optional[int],
+    mode: RequestMode,
+    output_dir: str,
+    target_format: ImageTargetFormat,
+    quality: int,
     width: Optional[int],
     height: Optional[int],
-    strip_metadata: Optional[bool],
+    strip_metadata: bool,
 ) -> Dict[str, Any]:
-    req_mode = mode or (request.mode if request else "upload")
-    req_output = output_dir or (request.output_dir if request else "")
-    req_format = target_format or (request.target_format if request else "jpg")
-    req_quality = quality if quality is not None else (request.quality if request else 80)
-    req_width = width or (request.width if request else None)
-    req_height = height or (request.height if request else None)
-    req_strip = strip_metadata if strip_metadata is not None else (request.strip_metadata if request else True)
-
-    if not req_output:
-        raise HTTPException(status_code=400, detail="Pasta de destino obrigatória")
-    output_path = _validate_directory_input(req_output, field_name="Pasta de destino", must_exist=False)
+    output_path = _validate_directory_input(output_dir, field_name="Pasta de destino", must_exist=False)
     _register_allowed_root(output_path)
 
     return {
-        "mode": req_mode,
+        "mode": mode.value,
         "output_path": output_path,
-        "target_format": req_format,
-        "quality": req_quality,
-        "width": req_width,
-        "height": req_height,
-        "strip_metadata": req_strip,
+        "target_format": target_format.value,
+        "quality": quality,
+        "width": width,
+        "height": height,
+        "strip_metadata": strip_metadata,
     }
 
 
@@ -1021,20 +1122,18 @@ async def _process_uploaded_images(
 
 @app.post("/process")
 async def process_images(
-    request: Optional[ProcessRequest] = None,
-    mode: str = Form(None),
-    source_dir: str = Form(None),
-    output_dir: str = Form(None),
-    target_format: str = Form(None),
-    quality: int = Form(None),
+    mode: RequestMode = Form(...),
+    source_dir: Optional[str] = Form(None),
+    output_dir: str = Form(...),
+    target_format: ImageTargetFormat = Form(...),
+    quality: int = Form(...),
     width: Optional[int] = Form(None),
     height: Optional[int] = Form(None),
     strip_metadata: bool = Form(True),
-    client_id: str = Form(None),
+    client_id: Optional[str] = Form(None),
     files: List[UploadFile] = File(None),
 ):
     resolved = _resolve_image_request(
-        request,
         mode=mode,
         output_dir=output_dir,
         target_format=target_format,
@@ -1043,16 +1142,16 @@ async def process_images(
         height=height,
         strip_metadata=strip_metadata,
     )
+    safe_client_id = _validate_optional_client_id(client_id)
     loop = asyncio.get_running_loop()
-    report_progress_async, report_progress_sync = _build_image_progress_callbacks(loop, client_id)
+    report_progress_async, report_progress_sync = _build_image_progress_callbacks(loop, safe_client_id)
 
     try:
         if resolved["mode"] == "folder":
-            folder_source = source_dir or (request.source_dir if request else None)
-            if not folder_source:
+            if not source_dir:
                 raise HTTPException(status_code=400, detail="Pasta de origem obrigatória no modo pasta")
             return await _process_folder_images(
-                source_dir=folder_source,
+                source_dir=source_dir,
                 output_path=resolved["output_path"],
                 target_format=resolved["target_format"],
                 quality=resolved["quality"],
@@ -1085,64 +1184,106 @@ async def process_images(
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    await manager.connect(websocket, client_id)
+    try:
+        safe_client_id = _normalize_client_id_value(client_id)
+    except ValueError:
+        await websocket.close(
+            code=status.WS_1008_POLICY_VIOLATION,
+            reason=CLIENT_ID_ERROR_DETAIL,
+        )
+        return
+
+    if safe_client_id is None:
+        await websocket.close(
+            code=status.WS_1008_POLICY_VIOLATION,
+            reason=CLIENT_ID_ERROR_DETAIL,
+        )
+        return
+
+    await manager.connect(websocket, safe_client_id)
     try:
         while True:
             await websocket.receive_text() # Keep connection open
     except WebSocketDisconnect:
-        manager.disconnect(client_id)
+        manager.disconnect(safe_client_id)
 
 @app.post("/process-video")
 async def process_videos(
-    mode: str = Form(...),
-    source_dir: str = Form(None),
+    mode: RequestMode = Form(...),
+    source_dir: Optional[str] = Form(None),
     output_dir: str = Form(...),
-    target_format: str = Form(...),
+    target_format: VideoTargetFormat = Form(...),
     quality: int = Form(...),
     width: Optional[int] = Form(None),
     height: Optional[int] = Form(None),
     remove_audio: bool = Form(False),
     strip_metadata: bool = Form(False),
-    client_id: str = Form(None), # Added client_id for WS
+    client_id: Optional[str] = Form(None),
     files: List[UploadFile] = File(None),
 ):
     try:
+        request_data = VideoProcessRequest(
+            mode=mode,
+            source_dir=source_dir,
+            output_dir=output_dir,
+            target_format=target_format,
+            quality=quality,
+            width=width,
+            height=height,
+            remove_audio=remove_audio,
+        )
+        safe_client_id = _validate_optional_client_id(client_id)
         results = []
-        output_dir_path = _validate_directory_input(output_dir, field_name="Pasta de destino", must_exist=False)
+        output_dir_path = _validate_directory_input(
+            request_data.output_dir,
+            field_name="Pasta de destino",
+            must_exist=False,
+        )
         _register_allowed_root(output_dir_path)
         
         # Define progress callback
         async def report_progress(filename: str, percent: int):
-            if client_id:
+            if safe_client_id:
                 await manager.send_personal_message({
                     "type": "progress",
                     "category": "videos",
                     "file": filename,
                     "percent": percent
-                }, client_id)
+                }, safe_client_id)
 
-        if mode == "folder":
-            if not source_dir:
+        if request_data.mode == RequestMode.FOLDER:
+            if not request_data.source_dir:
                  raise HTTPException(status_code=400, detail="Pasta de origem obrigatória")
-            source_dir_path = _validate_directory_input(source_dir, field_name="Pasta de origem", must_exist=True)
+            source_dir_path = _validate_directory_input(
+                request_data.source_dir,
+                field_name="Pasta de origem",
+                must_exist=True,
+            )
             
             # Iterate video files in folder
-            total_videos = sum(1 for _ in iter_video_files(source_dir_path))
+            video_paths = list(iter_video_files(source_dir_path))
+            total_videos = len(video_paths)
 
-            for i, v_path in enumerate(iter_video_files(source_dir_path), start=1):
+            for i, v_path in enumerate(video_paths, start=1):
                 # Report start
-                if client_id:
+                if safe_client_id:
                      await manager.send_personal_message({
                         "type": "status",
                         "category": "videos",
                         "message": f"Processando {v_path.name} ({i}/{total_videos})..."
-                    }, client_id)
+                    }, safe_client_id)
 
                 async def file_progress(p, _name=v_path.name):
                     await report_progress(_name, p)
 
                 success, msg, out_path = await video_processor.process_video(
-                    v_path, output_dir_path, target_format, quality, width, height, remove_audio,
+                    v_path,
+                    output_dir_path,
+                    request_data.target_format.value,
+                    request_data.quality,
+                    request_data.width,
+                    request_data.height,
+                    request_data.remove_audio,
                     strip_metadata=strip_metadata,
                     progress_callback=file_progress
                 )
@@ -1156,7 +1297,7 @@ async def process_videos(
                     "processed_size": get_file_size_str(Path(out_path)) if out_path else "-"
                 })
                 
-        elif mode == "upload":
+        elif request_data.mode == RequestMode.UPLOAD:
             if not files:
                 raise HTTPException(status_code=400, detail="Nenhum arquivo enviado")
             if len(files) > MAX_VIDEO_UPLOAD_FILES:
@@ -1171,12 +1312,12 @@ async def process_videos(
             _cleanup_temp_directory(temp_dir, TEMP_FILES_MAX_AGE_SECONDS, TEMP_FILES_MAX_COUNT)
             
             for i, file in enumerate(files):
-                if client_id:
+                if safe_client_id:
                      await manager.send_personal_message({
                         "type": "status",
                         "category": "videos",
                         "message": f"Processando upload {file.filename} ({i+1}/{len(files)})..."
-                    }, client_id)
+                    }, safe_client_id)
 
                 # Sanitize filename
                 original_name = file.filename or f"video_{i+1}"
@@ -1217,7 +1358,13 @@ async def process_videos(
                         await report_progress(_name, p)
 
                     success, msg, out_path = await video_processor.process_video(
-                        temp_path, output_dir_path, target_format, quality, width, height, remove_audio,
+                        temp_path,
+                        output_dir_path,
+                        request_data.target_format.value,
+                        request_data.quality,
+                        request_data.width,
+                        request_data.height,
+                        request_data.remove_audio,
                         strip_metadata=strip_metadata,
                         progress_callback=file_progress
                     )
@@ -1242,8 +1389,6 @@ async def process_videos(
                         await file.close()
                     except Exception as exc:
                         logger.debug("Falha ao fechar upload de vídeo %s: %s", original_name, exc)
-        else:
-            raise HTTPException(status_code=400, detail="Modo inválido")
         return {"status": "success", "processed_count": len(results), "results": results}
     except HTTPException:
         raise

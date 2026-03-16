@@ -8,7 +8,16 @@ Thank you for your interest in contributing.
    ```bash
    pip install -r requirements.txt
    ```
-2. Run tests:
+2. Install development dependencies:
+   ```bash
+   pip install -r requirements-dev.txt
+   ```
+3. Optional: rebuild local frontend assets after UI changes:
+   ```bash
+   npm install
+   npm run build:frontend
+   ```
+4. Run tests:
    ```bash
    PIXEL_FORGE_DISABLE_SENTINEL=1 pytest -q
    ```
@@ -16,7 +25,10 @@ Thank you for your interest in contributing.
 On Windows PowerShell:
 
 ```powershell
-$env:PIXEL_FORGE_DISABLE_SENTINEL='1'; pytest -q
+$env:PIXEL_FORGE_DISABLE_SENTINEL='1'
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+pytest -q
 ```
 
 ## ✅ Pull Request Checklist

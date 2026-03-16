@@ -8,6 +8,11 @@ Security fixes are applied to the latest main branch state.
 
 Please report vulnerabilities privately before public disclosure.
 
+Preferred channels:
+
+1. GitHub Security Advisories for this repository.
+2. E-mail: `security@informigados.com.br`
+
 Include:
 
 1. Clear impact description.

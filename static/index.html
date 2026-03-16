@@ -4,63 +4,43 @@
   <meta charset="utf-8">
   <title>Pixel Forge</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Font Awesome for Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta name="description" content="Conversor e otimizador de mídia local com foco em privacidade, velocidade e uso offline.">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="/static/styles/app.css">
   <!-- Data URI favicon avoids external requests and works with strict CSP. -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22><path fill=%22%2310b981%22 d=%22M234.5 5.7c13.9-5 29.1-5 43.1 0l192 68.6C485 80 496 94.9 496 112v288c0 17.1-11 32-26.4 37.7l-192 68.6c-13.9 5-29.1 5-43.1 0l-192-68.6C27 432 16 417.1 16 400V112c0-17.1 11-32 26.4-37.7l192-68.6zM256 66L82.3 128 256 190l173.7-62L256 66zm32 368.6l160-57.1v-188L288 246.6v188z%22/></svg>">
-  <style>
-    /* Custom scrollbar for better look */
-    ::-webkit-scrollbar {
-      width: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #0f172a;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #334155;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #475569;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-fade-in {
-      animation: fadeIn 0.3s ease-out forwards;
-    }
-  </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans selection:bg-emerald-500 selection:text-white">
 
   <!-- Top Bar with Language Switcher -->
-  <div class="absolute top-4 right-4 z-50">
-    <div id="language-switcher" class="relative">
-      <button id="lang-toggle-btn" type="button" onclick="toggleLanguageMenu()" aria-haspopup="true" aria-expanded="false" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 transition-colors text-sm">
-        <i class="fa-solid fa-globe text-emerald-400"></i>
-        <span id="current-lang">PT-BR</span>
-        <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
-      </button>
-      <div id="lang-menu" class="absolute right-0 mt-2 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden hidden z-[70]">
-        <button type="button" onclick="setLanguage('pt')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
-            <span>Português (BR)</span>
-            <span class="text-xs text-slate-500">PT-BR</span>
+  <div class="relative z-50 px-4 pt-4 sm:absolute sm:top-4 sm:right-4 sm:px-0 sm:pt-0">
+    <div class="flex justify-center sm:justify-end">
+      <div id="language-switcher" class="relative">
+        <button id="lang-toggle-btn" type="button" onclick="toggleLanguageMenu()" aria-haspopup="true" aria-expanded="false" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 transition-colors text-sm">
+          <i class="fa-solid fa-globe text-emerald-400"></i>
+          <span id="current-lang">PT-BR</span>
+          <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
         </button>
-        <button type="button" onclick="setLanguage('pt-pt')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
-            <span>Português (PT)</span>
-            <span class="text-xs text-slate-500">PT-PT</span>
-        </button>
-        <button type="button" onclick="setLanguage('en')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
-            <span>English</span>
-            <span class="text-xs text-slate-500">EN</span>
-        </button>
-        <button type="button" onclick="setLanguage('es')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
-            <span>Español</span>
-            <span class="text-xs text-slate-500">ES</span>
-        </button>
+        <div id="lang-menu" class="absolute right-0 mt-2 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden hidden z-[70]">
+          <button type="button" onclick="setLanguage('pt')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
+              <span>Português (BR)</span>
+              <span class="text-xs text-slate-500">PT-BR</span>
+          </button>
+          <button type="button" onclick="setLanguage('pt-pt')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
+              <span>Português (PT)</span>
+              <span class="text-xs text-slate-500">PT-PT</span>
+          </button>
+          <button type="button" onclick="setLanguage('en')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
+              <span>English</span>
+              <span class="text-xs text-slate-500">EN</span>
+          </button>
+          <button type="button" onclick="setLanguage('es')" class="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 transition-colors flex justify-between items-center">
+              <span>Español</span>
+              <span class="text-xs text-slate-500">ES</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -69,12 +49,12 @@
     <div class="w-full max-w-4xl bg-slate-900/90 backdrop-blur-sm border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
 
       <!-- Header -->
-      <header class="p-8 pb-0 space-y-2 text-center relative">
+      <header class="px-4 pt-6 pb-0 sm:p-8 sm:pb-0 space-y-3 text-center relative">
         <h1 class="text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent flex items-center justify-center gap-4">
           <i class="fa-solid fa-cube text-emerald-500"></i>
           Pixel Forge
         </h1>
-        <div id="sentinel-badge" class="hidden absolute top-16 right-4 sm:top-8 sm:right-8 items-center gap-2 px-3 py-1 bg-emerald-900/30 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-medium animate-pulse">
+        <div id="sentinel-badge" class="hidden mx-auto sm:mx-0 sm:absolute sm:top-8 sm:right-8 items-center gap-2 px-3 py-1 bg-emerald-900/30 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-medium animate-pulse">
             <i class="fa-solid fa-eye"></i>
             <span data-i18n="sentinel_active">Monitoramento Ativo</span>
         </div>
@@ -84,20 +64,20 @@
       </header>
 
       <!-- Tabs Navigation -->
-      <div class="flex flex-wrap sm:flex-nowrap justify-center gap-3 sm:gap-6 mt-8 border-b border-slate-800 px-4 sm:px-8 overflow-x-auto">
-        <button type="button" onclick="switchTab('images')" id="tab-btn-images" class="pb-4 px-2 text-sm font-medium border-b-2 border-emerald-500 text-emerald-400 transition-colors shrink-0">
+      <div id="tab-strip" role="tablist" aria-label="Seções principais" class="tab-strip flex flex-nowrap justify-start sm:justify-center gap-2 sm:gap-4 lg:gap-6 mt-8 border-b border-slate-800 px-4 sm:px-8 overflow-x-auto overscroll-x-contain snap-x snap-mandatory whitespace-nowrap">
+        <button type="button" role="tab" aria-selected="true" onclick="switchTab('images')" id="tab-btn-images" class="snap-center pb-4 px-2 text-sm font-medium border-b-2 border-emerald-500 text-emerald-400 transition-colors shrink-0">
           <i class="fa-solid fa-image mr-2"></i> <span data-i18n="tab_images">Imagens</span>
         </button>
-        <button type="button" onclick="switchTab('videos')" id="tab-btn-videos" class="pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
+        <button type="button" role="tab" aria-selected="false" onclick="switchTab('videos')" id="tab-btn-videos" class="snap-center pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
           <i class="fa-solid fa-video mr-2"></i> <span data-i18n="tab_videos">Vídeos</span>
         </button>
-        <button type="button" onclick="switchTab('history')" id="tab-btn-history" class="pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
+        <button type="button" role="tab" aria-selected="false" onclick="switchTab('history')" id="tab-btn-history" class="snap-center pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
           <i class="fa-solid fa-clock-rotate-left mr-2"></i> <span data-i18n="tab_history">Histórico</span>
         </button>
-        <button type="button" onclick="switchTab('config')" id="tab-btn-config" class="pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
+        <button type="button" role="tab" aria-selected="false" onclick="switchTab('config')" id="tab-btn-config" class="snap-center pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
           <i class="fa-solid fa-gear mr-2"></i> <span data-i18n="tab_config">Configurações</span>
         </button>
-        <button type="button" onclick="switchTab('about')" id="tab-btn-about" class="pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
+        <button type="button" role="tab" aria-selected="false" onclick="switchTab('about')" id="tab-btn-about" class="snap-center pb-4 px-2 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors shrink-0">
           <i class="fa-solid fa-circle-info mr-2"></i> <span data-i18n="tab_about">Sobre</span>
         </button>
       </div>
@@ -205,7 +185,7 @@
                     <label class="block text-xs font-medium text-slate-400" data-i18n="quality">Qualidade</label>
                     <span id="quality-val-images" class="text-xs text-emerald-400 font-mono">80%</span>
                   </div>
-                  <input type="range" name="quality" min="1" max="100" value="80" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="document.getElementById('quality-val-images').textContent = this.value + '%'">
+                  <input type="range" name="quality" min="1" max="100" value="80" aria-label="Qualidade da imagem" aria-valuetext="80%" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="updateQualitySlider(this, 'quality-val-images')">
                 </div>
 
                 <div class="flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-800/30">
@@ -268,7 +248,7 @@
                     </button>
                 </div>
                 <div class="progress-bars space-y-3 mb-4 max-h-40 overflow-y-auto pr-2"></div>
-                <div class="console-log h-32 bg-slate-950 rounded-lg border border-slate-800 p-3 font-mono text-xs text-slate-400 overflow-y-auto whitespace-pre-wrap"></div>
+                <div class="console-log h-24 sm:h-32 bg-slate-950 rounded-lg border border-slate-800 p-3 font-mono text-xs text-slate-400 overflow-y-auto whitespace-pre-wrap"></div>
             </div>
           </div>
         </div>
@@ -378,7 +358,7 @@
                     <label class="block text-xs font-medium text-slate-400" data-i18n="quality">Qualidade</label>
                     <span id="quality-val-videos" class="text-xs text-emerald-400 font-mono">80%</span>
                   </div>
-                  <input type="range" name="quality" min="1" max="100" value="80" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="document.getElementById('quality-val-videos').textContent = this.value + '%'">
+                  <input type="range" name="quality" min="1" max="100" value="80" aria-label="Qualidade do vídeo" aria-valuetext="80%" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" oninput="updateQualitySlider(this, 'quality-val-videos')">
                 </div>
 
                 <div class="flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-800/30">
@@ -449,7 +429,7 @@
                     </button>
                 </div>
                 <div class="progress-bars space-y-3 mb-4 max-h-40 overflow-y-auto pr-2"></div>
-                <div class="console-log h-32 bg-slate-950 rounded-lg border border-slate-800 p-3 font-mono text-xs text-slate-400 overflow-y-auto whitespace-pre-wrap"></div>
+                <div class="console-log h-24 sm:h-32 bg-slate-950 rounded-lg border border-slate-800 p-3 font-mono text-xs text-slate-400 overflow-y-auto whitespace-pre-wrap"></div>
             </div>
           </div>
         </div>
@@ -544,11 +524,11 @@
                         <i class="fa-solid fa-circle-info text-2xl text-emerald-500"></i>
                     </div>
                     <div>
-                        <h2 class="text-xl font-bold text-white">Sobre o Pixel Forge</h2>
-                        <p class="text-slate-400 text-sm">Versão 1.0.0</p>
+                        <h2 class="text-xl font-bold text-white" data-i18n="about_header">Sobre o Pixel Forge</h2>
+                        <p class="text-slate-400 text-sm" data-i18n="about_version">Versão 1.0.0</p>
                     </div>
                 </div>
-                <p class="text-slate-300 leading-relaxed mb-4">
+                <p class="text-slate-300 leading-relaxed mb-4" data-i18n="about_description">
                     O Pixel Forge é uma ferramenta poderosa e intuitiva para otimização e conversão de mídia local.
                     Desenvolvido para profissionais que buscam eficiência, o sistema oferece processamento seguro,
                     presets inteligentes e feedback em tempo real.
@@ -558,26 +538,26 @@
             <!-- Features -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="bg-slate-800/30 rounded-xl p-5 border border-slate-700/30">
-                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Presets Inteligentes</h3>
-                    <p class="text-slate-400 text-xs">Configurações otimizadas para redes sociais e web.</p>
+                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i><span data-i18n="about_feature_presets_title">Presets Inteligentes</span></h3>
+                    <p class="text-slate-400 text-xs" data-i18n="about_feature_presets_desc">Configurações otimizadas para redes sociais e web.</p>
                 </div>
                 <div class="bg-slate-800/30 rounded-xl p-5 border border-slate-700/30">
-                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-eye mr-2"></i>Modo Sentinela</h3>
-                    <p class="text-slate-400 text-xs">Monitoramento automático de pastas para conversão instantânea.</p>
+                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-eye mr-2"></i><span data-i18n="about_feature_sentinel_title">Modo Sentinela</span></h3>
+                    <p class="text-slate-400 text-xs" data-i18n="about_feature_sentinel_desc">Monitoramento automático de pastas para conversão instantânea.</p>
                 </div>
                 <div class="bg-slate-800/30 rounded-xl p-5 border border-slate-700/30">
-                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-bolt mr-2"></i>Alta Performance</h3>
-                    <p class="text-slate-400 text-xs">Processamento multithread local com FFmpeg e Pillow.</p>
+                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-bolt mr-2"></i><span data-i18n="about_feature_performance_title">Alta Performance</span></h3>
+                    <p class="text-slate-400 text-xs" data-i18n="about_feature_performance_desc">Processamento multithread local com FFmpeg e Pillow.</p>
                 </div>
                 <div class="bg-slate-800/30 rounded-xl p-5 border border-slate-700/30">
-                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-shield-halved mr-2"></i>Privacidade</h3>
-                    <p class="text-slate-400 text-xs">Seus arquivos nunca saem do seu computador.</p>
+                    <h3 class="text-emerald-400 font-semibold mb-3 text-sm"><i class="fa-solid fa-shield-halved mr-2"></i><span data-i18n="about_feature_privacy_title">Privacidade</span></h3>
+                    <p class="text-slate-400 text-xs" data-i18n="about_feature_privacy_desc">Seus arquivos nunca saem do seu computador.</p>
                 </div>
             </div>
 
             <!-- Credits -->
             <div class="bg-slate-800/30 rounded-xl p-6 border border-slate-700/30">
-                <h3 class="text-white font-semibold mb-4 text-sm">Tecnologias &amp; Créditos</h3>
+                <h3 class="text-white font-semibold mb-4 text-sm" data-i18n="about_credits_title">Tecnologias &amp; Créditos</h3>
                 <div class="flex flex-wrap gap-2 mb-6">
                     <span class="px-2 py-1 bg-slate-700/50 rounded text-[10px] text-slate-300 border border-slate-600/50">FastAPI</span>
                     <span class="px-2 py-1 bg-slate-700/50 rounded text-[10px] text-slate-300 border border-slate-600/50">Python</span>
@@ -587,15 +567,15 @@
 
                 <div class="pt-4 border-t border-slate-700/50 space-y-4">
                     <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-                        <p class="text-slate-500 text-xs">Desenvolvido com ❤️ pela equipe INformigados</p>
+                        <p class="text-slate-500 text-xs" data-i18n="about_built_by">Desenvolvido com ❤️ pela equipe INformigados</p>
                         <a href="https://github.com/informigados/pixel-forge/" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-xs font-medium">
                             <i class="fa-brands fa-github"></i>
-                            Acessar Repositório
+                            <span data-i18n="about_repo_link">Acessar Repositório</span>
                         </a>
                     </div>
 
                     <!-- Authors -->
-                    <h4 class="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-3 mt-4">Autores</h4>
+                    <h4 class="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-3 mt-4" data-i18n="about_authors_title">Autores</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div class="flex items-center gap-3 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50 hover:bg-slate-800/80 transition-colors">
                             <img src="images/authors/informigados.webp" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTAxODIxIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwIDIxdi0yYTQgNCAwIDAgMC00LTRINGE0IDQgMCAwIDAtNCA0djIiPjwvcGF0aD48Y2lyY2xlIGN4PSIxMiIgY3k9IjciIHI9IjQiPjwvY2lyY2xlPjwvc3ZnPg=='" class="w-10 h-10 rounded-full object-cover border border-emerald-500/30 bg-emerald-900/20" alt="INformigados">
@@ -904,13 +884,28 @@
         report_bug_title: "Encontrou um problema?",
         report_bug_desc: "Relate erros ou envie sugestões diretamente para nossa equipe.",
         btn_report_bug: "Reportar Erro",
+        about_header: "Sobre o Pixel Forge",
+        about_version: "Versão 1.0.0",
+        about_description: "O Pixel Forge é uma ferramenta poderosa e intuitiva para otimização e conversão de mídia local. Desenvolvido para profissionais que buscam eficiência, o sistema oferece processamento seguro, presets inteligentes e feedback em tempo real.",
+        about_feature_presets_title: "Presets Inteligentes",
+        about_feature_presets_desc: "Configurações otimizadas para redes sociais e web.",
+        about_feature_sentinel_title: "Modo Sentinela",
+        about_feature_sentinel_desc: "Monitoramento automático de pastas para conversão instantânea.",
+        about_feature_performance_title: "Alta Performance",
+        about_feature_performance_desc: "Processamento multithread local com FFmpeg e Pillow.",
+        about_feature_privacy_title: "Privacidade",
+        about_feature_privacy_desc: "Seus arquivos nunca saem do seu computador.",
+        about_credits_title: "Tecnologias & Créditos",
+        about_built_by: "Desenvolvido com ❤️ pela equipe INformigados",
+        about_repo_link: "Acessar Repositório",
+        about_authors_title: "Autores",
         collaborators_title: "Colaboradores",
         collab_text: "Junte-se à revolução! Estamos em busca de talentos para elevar o nível desta ferramenta. Contribua com seu código e ganhe destaque exclusivo em nossa galeria de colaboradores.",
         btn_contribute: "Contribuir",
         patrons_title: "Patrocinadores",
         patrons_text: "Seja um pilar da nossa comunidade! Seu patrocínio é o combustível que mantém esta e outras ferramentas inovadoras vivas e gratuitas para todos.",
         btn_support: "Apoiar Projeto",
-        sentinel_error: "Erro (Sentinela)",
+        sentinel_error: "Erro (Sentinela): {file}",
         files_selected_count: "{count} arquivo(s) selecionado(s)",
         processing_finished_with_errors: "Concluído com erros ({count}).",
         folder_dialog_unavailable: "Não foi possível abrir o seletor de pasta."
@@ -968,13 +963,28 @@
         report_bug_title: "Encontrou um problema?",
         report_bug_desc: "Relate erros ou envie sugestões diretamente para a nossa equipa.",
         btn_report_bug: "Reportar Erro",
+        about_header: "Sobre o Pixel Forge",
+        about_version: "Versão 1.0.0",
+        about_description: "O Pixel Forge é uma ferramenta poderosa e intuitiva para otimização e conversão de multimédia local. Desenvolvido para profissionais que procuram eficiência, o sistema oferece processamento seguro, presets inteligentes e feedback em tempo real.",
+        about_feature_presets_title: "Presets Inteligentes",
+        about_feature_presets_desc: "Configurações otimizadas para redes sociais e web.",
+        about_feature_sentinel_title: "Modo Sentinela",
+        about_feature_sentinel_desc: "Monitorização automática de pastas para conversão instantânea.",
+        about_feature_performance_title: "Alto Desempenho",
+        about_feature_performance_desc: "Processamento multithread local com FFmpeg e Pillow.",
+        about_feature_privacy_title: "Privacidade",
+        about_feature_privacy_desc: "Os seus ficheiros nunca saem do seu computador.",
+        about_credits_title: "Tecnologias & Créditos",
+        about_built_by: "Desenvolvido com ❤️ pela equipa INformigados",
+        about_repo_link: "Aceder ao Repositório",
+        about_authors_title: "Autores",
         collaborators_title: "Colaboradores",
         collab_text: "Junte-se à revolução! Estamos à procura de talentos para elevar o nível desta ferramenta. Contribua com o seu código e ganhe destaque exclusivo na nossa galeria de colaboradores.",
         btn_contribute: "Contribuir",
         patrons_title: "Patrocinadores",
         patrons_text: "Seja um pilar da nossa comunidade! O seu patrocínio é o combustível que mantém esta e outras ferramentas inovadoras vivas e gratuitas para todos.",
         btn_support: "Apoiar Projeto",
-        sentinel_error: "Erro (Sentinela)",
+        sentinel_error: "Erro (Sentinela): {file}",
         files_selected_count: "{count} ficheiro(s) selecionado(s)",
         processing_finished_with_errors: "Concluído com erros ({count}).",
         folder_dialog_unavailable: "Não foi possível abrir o seletor de pasta."
@@ -1032,13 +1042,28 @@
         report_bug_title: "Found a bug?",
         report_bug_desc: "Report errors or send suggestions directly to our team.",
         btn_report_bug: "Report Bug",
+        about_header: "About Pixel Forge",
+        about_version: "Version 1.0.0",
+        about_description: "Pixel Forge is a powerful and intuitive tool for local media optimization and conversion. Built for professionals who need efficiency, the system offers secure processing, smart presets, and real-time feedback.",
+        about_feature_presets_title: "Smart Presets",
+        about_feature_presets_desc: "Optimized settings for social platforms and the web.",
+        about_feature_sentinel_title: "Sentinel Mode",
+        about_feature_sentinel_desc: "Automatic folder monitoring for instant conversion.",
+        about_feature_performance_title: "High Performance",
+        about_feature_performance_desc: "Local multithreaded processing with FFmpeg and Pillow.",
+        about_feature_privacy_title: "Privacy",
+        about_feature_privacy_desc: "Your files never leave your computer.",
+        about_credits_title: "Technology & Credits",
+        about_built_by: "Built with ❤️ by the INformigados team",
+        about_repo_link: "Open Repository",
+        about_authors_title: "Authors",
         collaborators_title: "Collaborators",
         collab_text: "Join the revolution! We are looking for talents to elevate this tool. Contribute with your code and get exclusive recognition in our contributors gallery.",
         btn_contribute: "Contribute",
         patrons_title: "Sponsors",
         patrons_text: "Be a pillar of our community! Your sponsorship is the fuel that keeps this and other innovative tools alive and free for everyone.",
         btn_support: "Support Project",
-        sentinel_error: "Error (Sentinel)",
+        sentinel_error: "Error (Sentinel): {file}",
         files_selected_count: "{count} file(s) selected",
         processing_finished_with_errors: "Completed with errors ({count}).",
         folder_dialog_unavailable: "Unable to open the folder picker."
@@ -1096,13 +1121,28 @@
         report_bug_title: "¿Encontró un problema?",
         report_bug_desc: "Informe errores o envíe sugerencias directamente a nuestro equipo.",
         btn_report_bug: "Reportar Error",
+        about_header: "Acerca de Pixel Forge",
+        about_version: "Versión 1.0.0",
+        about_description: "Pixel Forge es una herramienta potente e intuitiva para la optimización y conversión local de medios. Diseñado para profesionales que buscan eficiencia, el sistema ofrece procesamiento seguro, presets inteligentes y retroalimentación en tiempo real.",
+        about_feature_presets_title: "Presets Inteligentes",
+        about_feature_presets_desc: "Configuraciones optimizadas para redes sociales y la web.",
+        about_feature_sentinel_title: "Modo Centinela",
+        about_feature_sentinel_desc: "Supervisión automática de carpetas para conversión instantánea.",
+        about_feature_performance_title: "Alto Rendimiento",
+        about_feature_performance_desc: "Procesamiento local multihilo con FFmpeg y Pillow.",
+        about_feature_privacy_title: "Privacidad",
+        about_feature_privacy_desc: "Sus archivos nunca salen de su computadora.",
+        about_credits_title: "Tecnologías y Créditos",
+        about_built_by: "Desarrollado con ❤️ por el equipo INformigados",
+        about_repo_link: "Abrir Repositorio",
+        about_authors_title: "Autores",
         collaborators_title: "Colaboradores",
         collab_text: "¡Únete a la revolución! Estamos buscando talentos para elevar el nivel de esta herramienta. Contribuye con tu código y obtén reconocimiento exclusivo en nuestra galería de colaboradores.",
         btn_contribute: "Contribuir",
         patrons_title: "Patrocinadores",
         patrons_text: "¡Sea un pilar de nuestra comunidad! Su patrocinio es el combustible que mantiene vivas y gratuitas esta y otras herramientas innovadoras para todos.",
         btn_support: "Apoyar Proyecto",
-        sentinel_error: "Error (Centinela)",
+        sentinel_error: "Error (Centinela): {file}",
         files_selected_count: "{count} archivo(s) seleccionado(s)",
         processing_finished_with_errors: "Completado con errores ({count}).",
         folder_dialog_unavailable: "No se pudo abrir el selector de carpeta."
@@ -1303,6 +1343,13 @@
       if (!switcher.contains(e.target)) closeLanguageMenu();
     });
 
+    window.updateQualitySlider = function(slider, valueId) {
+      const valueText = `${slider.value}%`;
+      const valueEl = document.getElementById(valueId);
+      if (valueEl) valueEl.textContent = valueText;
+      slider.setAttribute('aria-valuetext', valueText);
+    };
+
     // --- Tabs Logic ---
     window.switchTab = function(tabId) {
       try {
@@ -1319,6 +1366,7 @@
             if(btn) {
                 btn.classList.remove('border-emerald-500', 'text-emerald-400');
                 btn.classList.add('border-transparent', 'text-slate-400');
+                btn.setAttribute('aria-selected', 'false');
             }
           });
 
@@ -1335,6 +1383,8 @@
           if(activeBtn) {
               activeBtn.classList.remove('border-transparent', 'text-slate-400');
               activeBtn.classList.add('border-emerald-500', 'text-emerald-400');
+              activeBtn.setAttribute('aria-selected', 'true');
+              activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
           }
 
           if(tabId === 'history') renderHistory();
@@ -1765,7 +1815,8 @@
         if (!preset) return;
 
         const form = document.getElementById('process-form-images');
-        if (preset.format) form.target_format.value = preset.format;
+        const targetFormatSelect = form?.elements?.namedItem('target_format');
+        if (preset.format && targetFormatSelect) targetFormatSelect.value = preset.format;
         if (preset.quality) {
             form.quality.value = preset.quality;
             document.getElementById('quality-val-images').textContent = preset.quality + '%';
@@ -1800,7 +1851,8 @@
         if (!preset) return;
 
         const form = document.getElementById('process-form-videos');
-        if (preset.format) form.target_format.value = preset.format;
+        const targetFormatSelect = form?.elements?.namedItem('target_format');
+        if (preset.format && targetFormatSelect) targetFormatSelect.value = preset.format;
         if (preset.quality) {
             form.quality.value = preset.quality;
             document.getElementById('quality-val-videos').textContent = preset.quality + '%';
@@ -1946,6 +1998,12 @@
         const btn = form.querySelector('button[type="submit"]');
         const originalBtnText = btn.innerHTML;
 
+        if (isProcessing[type]) {
+            return;
+        }
+
+        isProcessing[type] = true;
+
         // Get Tab Specific Elements
         const progressSection = document.getElementById(`progress-section-${type}`);
         const logEl = progressSection.querySelector('.console-log');
@@ -1986,7 +2044,11 @@
             formData.append('mode', modeVal);
             formData.delete(`mode_${type}`);
 
-            if (typeof clientId !== 'undefined') formData.append('client_id', clientId);
+            if (hasActiveWebSocket()) {
+                formData.append('client_id', clientId);
+            } else {
+                logToConsole('WebSocket ainda nao esta pronto; processamento seguira sem progresso em tempo real.');
+            }
 
             // Validate Output Dir
             const outputDir = formData.get('output_dir');
@@ -2178,6 +2240,7 @@
             setStatus(translations[currentLang].status_comm_error, 'error', type);
             if(progressBar) progressBar.style.width = '0%';
         } finally {
+            isProcessing[type] = false;
             btn.disabled = false;
             btn.innerHTML = originalBtnText;
             setTimeout(() => { if(progressBar && progressBar.style.width === '100%') progressBar.style.width = '0%'; }, 3000);
@@ -2319,11 +2382,17 @@
 
     // --- WebSocket Logic ---
     let ws;
+    let wsIsOpen = false;
     let wsReconnectAttempts = 0;
     let wsReconnectTimer = null;
     const WS_BASE_RECONNECT_MS = 1000;
     const WS_MAX_RECONNECT_MS = 30000;
-    const clientId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+    const isProcessing = { images: false, videos: false };
+    const clientId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+    function hasActiveWebSocket() {
+        return Boolean(wsIsOpen && ws && ws.readyState === WebSocket.OPEN);
+    }
 
     function connectWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -2333,6 +2402,7 @@
 
         ws.onopen = function() {
             console.log("WebSocket connected");
+            wsIsOpen = true;
             wsReconnectAttempts = 0;
             if (wsReconnectTimer) {
                 clearTimeout(wsReconnectTimer);
@@ -2414,7 +2484,7 @@
                     });
                 }
                 else if (data.type === 'sentinel_error') {
-                    const msg = (translations[currentLang].sentinel_error || 'Erro (Sentinela)') + ': ' + data.file;
+                    const msg = formatI18n('sentinel_error', { file: data.file }, `Erro (Sentinela): ${data.file}`);
                     setStatus(msg, 'error', data.file_type);
                     showToast(msg + ' - ' + data.error, 'error');
                 }
@@ -2425,6 +2495,7 @@
         };
 
         ws.onclose = function() {
+            wsIsOpen = false;
             const delay = Math.min(WS_BASE_RECONNECT_MS * (2 ** wsReconnectAttempts), WS_MAX_RECONNECT_MS);
             wsReconnectAttempts += 1;
             console.log(`WebSocket disconnected. Reconnecting in ${delay}ms...`);
@@ -2433,6 +2504,7 @@
 
         ws.onerror = function(err) {
             console.error("WebSocket error", err);
+            wsIsOpen = false;
             ws.close();
         };
     }
@@ -2447,6 +2519,10 @@
       savedLang = localStorage.getItem('pixelForgeLang');
     } catch (e) {}
     setLanguage(savedLang && translations[savedLang] ? savedLang : 'pt');
+    document.querySelectorAll('input[type="range"][name="quality"]').forEach((slider) => {
+      const valueId = slider.closest('.space-y-2')?.querySelector('span[id^="quality-val-"]')?.id;
+      if (valueId) updateQualitySlider(slider, valueId);
+    });
     updateMode('images');
     updateMode('videos');
   </script>

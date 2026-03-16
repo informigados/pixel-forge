@@ -34,8 +34,11 @@ elif command -v python3 >/dev/null 2>&1; then
 elif command -v python >/dev/null 2>&1; then
   PYTHON_EXE="python"
 else
-  fail "Python nao encontrado no PATH. Instale Python 3.11+ e tente novamente."
+  fail "Python nao encontrado no PATH. Instale Python 3.10+ e tente novamente."
 fi
+
+echo "[0/4] Verificando versao do Python..."
+"${PYTHON_EXE}" start.py --check-python || fail "Versao de Python incompatível."
 
 echo "[1/4] Verificando pip..."
 if ! "${PYTHON_EXE}" -m pip --version >/dev/null 2>&1; then
@@ -51,8 +54,13 @@ else
   echo "[OK] Dependencias principais ja estao instaladas."
 fi
 
+if [ "${PIXEL_FORGE_INSTALL_DEV:-0}" = "1" ]; then
+  echo "[INFO] Instalando dependencias de desenvolvimento..."
+  "${PYTHON_EXE}" -m pip install -r requirements-dev.txt || fail "Falha ao instalar dependencies de requirements-dev.txt"
+fi
+
 echo "[3/4] Verificando FFmpeg e iniciando sistema..."
-if ! "${PYTHON_EXE}" -c "from pathlib import Path; import shutil,sys; b=Path('bin'); local=((b/'ffmpeg.exe').exists() and (b/'ffprobe.exe').exists()) or ((b/'ffmpeg').exists() and (b/'ffprobe').exists()); onpath=bool(shutil.which('ffmpeg')) and bool(shutil.which('ffprobe')); sys.exit(0 if (local or onpath) else 1)"; then
+if ! "${PYTHON_EXE}" start.py --check-ffmpeg; then
   echo "[INFO] FFmpeg nao encontrado. Configurando..."
   "${PYTHON_EXE}" setup_ffmpeg.py || fail "Falha na configuracao do FFmpeg."
 else

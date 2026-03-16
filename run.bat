@@ -24,10 +24,17 @@ if exist ".venv\Scripts\python.exe" (
     where python >nul 2>&1
     if %ERRORLEVEL% NEQ 0 (
         echo [ERRO] Python nao encontrado no PATH.
-        echo Instale o Python 3.11+ e tente novamente.
+        echo Instale o Python 3.10+ e tente novamente.
         pause
         exit /b 1
     )
+)
+
+echo [0/4] Verificando versao do Python...
+"%PYTHON_EXE%" start.py --check-python
+if %ERRORLEVEL% NEQ 0 (
+    pause
+    exit /b 1
 )
 
 echo [1/4] Verificando pip...
@@ -56,8 +63,18 @@ if %ERRORLEVEL% NEQ 0 (
     echo [OK] Dependencias principais ja estao instaladas.
 )
 
+if /I "%PIXEL_FORGE_INSTALL_DEV%"=="1" (
+    echo [INFO] Instalando dependencias de desenvolvimento...
+    "%PYTHON_EXE%" -m pip install -r requirements-dev.txt
+    if %ERRORLEVEL% NEQ 0 (
+        echo [ERRO] Falha ao instalar dependencies de requirements-dev.txt
+        pause
+        exit /b 1
+    )
+)
+
 echo [3/4] Verificando FFmpeg e iniciando sistema...
-"%PYTHON_EXE%" -c "from pathlib import Path; import shutil,sys; b=Path('bin'); local=((b/'ffmpeg.exe').exists() and (b/'ffprobe.exe').exists()) or ((b/'ffmpeg').exists() and (b/'ffprobe').exists()); onpath=bool(shutil.which('ffmpeg')) and bool(shutil.which('ffprobe')); sys.exit(0 if (local or onpath) else 1)"
+"%PYTHON_EXE%" start.py --check-ffmpeg
 if %ERRORLEVEL% NEQ 0 (
     echo [INFO] FFmpeg nao encontrado. Configurando...
     "%PYTHON_EXE%" setup_ffmpeg.py

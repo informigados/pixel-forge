@@ -1,7 +1,7 @@
 import pytest
 from PIL import Image
 
-from app.image_processor import ImageProcessingError, process_single_image
+from app.image_processor import ImageProcessingError, process_directory, process_single_image
 from app.utils import iter_image_files, iter_video_files
 
 
@@ -123,3 +123,65 @@ def test_process_single_image_surfaces_output_permission_errors(tmp_path, monkey
             height=None,
             strip_metadata=True,
         )
+
+
+def test_process_directory_iterates_source_only_once(tmp_path, monkeypatch):
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "out"
+    source_dir.mkdir()
+    Image.new("RGB", (20, 20), color=(1, 2, 3)).save(source_dir / "a.png")
+    Image.new("RGB", (20, 20), color=(4, 5, 6)).save(source_dir / "b.png")
+
+    import app.image_processor as image_processor_module
+
+    original_iter = image_processor_module.iter_image_files
+    call_count = 0
+
+    def counting_iter(root_dir):
+        nonlocal call_count
+        call_count += 1
+        return original_iter(root_dir)
+
+    monkeypatch.setattr(image_processor_module, "iter_image_files", counting_iter)
+
+    processed_count, errors, _duration_ms, results = process_directory(
+        str(source_dir),
+        str(output_dir),
+        "jpg",
+        80,
+        None,
+        None,
+        True,
+    )
+
+    assert call_count == 1
+    assert processed_count == 2
+    assert errors == []
+    assert len(results) == 2
+
+
+def test_process_single_image_does_not_pass_optimize_for_tiff(tmp_path, monkeypatch):
+    source = tmp_path / "input.png"
+    Image.new("RGB", (20, 20), color=(1, 2, 3)).save(source)
+
+    captured_kwargs = {}
+    original_save = Image.Image.save
+
+    def save_without_optimize(self, fp, format=None, **params):
+        captured_kwargs.update(params)
+        return original_save(self, fp, format=format, **params)
+
+    monkeypatch.setattr(Image.Image, "save", save_without_optimize)
+
+    processed = process_single_image(
+        source_path=source,
+        output_dir=str(tmp_path / "out"),
+        target_format="tiff",
+        quality=80,
+        width=None,
+        height=None,
+        strip_metadata=True,
+    )
+
+    assert processed.exists()
+    assert "optimize" not in captured_kwargs

@@ -6,7 +6,7 @@
 
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue.svg"></a>
-  <a href="https://fastapi.tiangolo.com/"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.129.0-009688.svg"></a>
+  <a href="https://fastapi.tiangolo.com/"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115.11-009688.svg"></a>
   <a href="https://github.com/informigados/pixel-forge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/informigados/pixel-forge/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://deepwiki.com/informigados/pixel-forge"><img alt="Ask DeepWiki" src="https://deepwiki.com/badge.svg"></a>
 </div>
@@ -62,7 +62,7 @@ Default content language in the product is **Portuguese (Brazil)**, with additio
 
 - Backend: Python, FastAPI, Uvicorn
 - Media: Pillow (+ optional AVIF plugin), FFmpeg/FFprobe
-- Frontend: HTML, TailwindCSS (CDN), Vanilla JavaScript
+- Frontend: HTML, TailwindCSS compilado localmente, Font Awesome local, Vanilla JavaScript
 - Tests: Pytest + FastAPI TestClient
 - CI: GitHub Actions (Linux and Windows matrix)
 
@@ -75,12 +75,21 @@ pixel-forge/
     image_processor.py
     video_processor.py
     utils.py
+  frontend/
+    tailwind-input.css
+  scripts/
+    sync-fontawesome-assets.mjs
   static/
     index.html
     images/
+    styles/
+    vendor/
     temp_compare/
   tests/
   .github/workflows/ci.yml
+  requirements-dev.txt
+  package.json
+  tailwind.config.js
   start.py
   setup_ffmpeg.py
 ```
@@ -117,30 +126,49 @@ cd pixel-forge
 python -m venv .venv
 source .venv/bin/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+npm install
+npm run build:frontend
 python start.py
 ```
 
 `start.py` checks FFmpeg/FFprobe and auto-runs `setup_ffmpeg.py` when needed.
 
-Open: `http://localhost:8000`
+The server starts on the first free port in the `8000-8100` range and prints the final URL in the console.
+
+### 🎨 Frontend Asset Build
+
+The repository ships with compiled frontend assets under `static/`, so end users do not need Node.js to run the app.
+
+Use the frontend toolchain only when you want to rebuild local assets:
+
+```bash
+npm install
+npm run build:frontend
+```
+
+This command:
+
+- synchronizes Font Awesome files into `static/vendor/fontawesome`
+- recompiles Tailwind CSS into `static/styles/app.css`
 
 ## 🧪 Running Tests
 
 ```bash
 pip install -r requirements.txt
-PIXEL_FORGE_DISABLE_SENTINEL=1 pytest -q
+pip install -r requirements-dev.txt
+PIXEL_FORGE_DISABLE_SENTINEL=1 python -m pytest -q
 ```
 
 PowerShell:
 
 ```powershell
-$env:PIXEL_FORGE_DISABLE_SENTINEL='1'; pytest -q
+$env:PIXEL_FORGE_DISABLE_SENTINEL='1'; python -m pytest -q
 ```
 
 CI runs `compileall` + `pytest` on:
 
 - Ubuntu (`3.11`, `3.12`)
-- Windows (`3.11`)
+- Windows (`3.11`, `3.12`)
 
 ## ⚙️ Configuration (Environment Variables)
 
@@ -153,6 +181,9 @@ The backend supports runtime hardening with environment variables:
 - `PIXEL_FORGE_MAX_VIDEO_UPLOAD_BYTES`
 - `PIXEL_FORGE_TEMP_MAX_AGE_SECONDS`
 - `PIXEL_FORGE_TEMP_MAX_COUNT`
+- `PIXEL_FORGE_ALLOW_UNVERIFIED_DOWNLOADS`
+- `PIXEL_FORGE_FFMPEG_MACOS_SHA256`
+- `PIXEL_FORGE_FFPROBE_MACOS_SHA256`
 
 ## 🔌 API Endpoints (Core)
 

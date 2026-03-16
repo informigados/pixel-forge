@@ -153,7 +153,7 @@ def process_single_image(
             save_kwargs["quality"] = quality_value
             
         # Formats that support optimization
-        if target_format_upper in ["JPEG", "PNG", "WEBP", "TIFF", "AVIF"]:
+        if target_format_upper in ["JPEG", "PNG", "WEBP", "AVIF"]:
             save_kwargs["optimize"] = True
 
         # Pass EXIF if preserved
@@ -189,7 +189,8 @@ def process_directory(
     progress_callback: Optional[Callable[[str, int], None]] = None,
 ) -> Tuple[int, List[str], int, List[Dict[str, str]]]:
     start = time.perf_counter()
-    total_files = sum(1 for _ in iter_image_files(source_dir))
+    image_paths = list(iter_image_files(source_dir))
+    total_files = len(image_paths)
     
     errors: List[str] = []
     results: List[Dict[str, str]] = []
@@ -199,7 +200,7 @@ def process_directory(
         duration_ms = int((time.perf_counter() - start) * 1000)
         return 0, errors, duration_ms, results
 
-    for i, path in enumerate(iter_image_files(source_dir)):
+    for i, path in enumerate(image_paths):
         if progress_callback:
             # Report progress
             try:

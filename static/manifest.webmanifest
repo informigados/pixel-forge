@@ -1,0 +1,9 @@
+{
+  "name": "Pixel Forge",
+  "short_name": "Pixel Forge",
+  "description": "Conversor e otimizador de mídia local com foco em privacidade, velocidade e uso offline.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0f172a"
+}

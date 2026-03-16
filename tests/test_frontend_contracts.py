@@ -64,7 +64,9 @@ def test_frontend_polish_and_feedback_contract(project_root):
     assert "showToast('Não foi possível abrir o seletor de pasta.', 'error');" in content
     assert "showToast('Erro ao selecionar pasta.', 'error');" in content
     assert "p-4 sm:p-8" in content
-    assert "top-16 right-4 sm:top-8 sm:right-8" in content
+    assert "absolute top-4 right-4 z-50" not in content
+    assert "sm:absolute sm:top-4 sm:right-4" in content
+    assert "hidden mx-auto sm:mx-0 sm:absolute sm:top-8 sm:right-8" in content
     assert 'href="https://github.com/informigados/pixel-forge/"' in content
     assert 'href="http://github.com/informigados/pixel-forge/"' not in content
 
@@ -72,6 +74,8 @@ def test_frontend_polish_and_feedback_contract(project_root):
 def test_sentinel_error_translation_key_exists_in_all_languages(project_root):
     content = _read_index(project_root)
     assert content.count("sentinel_error:") == 4
+    assert 'sentinel_error: "Erro (Sentinela): {file}"' in content
+    assert 'formatI18n(\'sentinel_error\', { file: data.file }' in content
 
 
 def test_image_dimensions_checkbox_is_outside_overlay_grid(project_root):
@@ -102,3 +106,26 @@ def test_video_tab_vertical_spacing_and_footer_year_contract(project_root):
     content = _read_index(project_root)
     assert '<div id="tab-videos" class="hidden">' in content
     assert "copyrightEl.textContent = `${year} © Pixel Forge`;" in content
+
+
+def test_processing_flow_avoids_duplicate_submits_and_ws_races(project_root):
+    content = _read_index(project_root)
+
+    assert "const isProcessing = { images: false, videos: false };" in content
+    assert "if (isProcessing[type]) {" in content
+    assert "isProcessing[type] = true;" in content
+    assert "isProcessing[type] = false;" in content
+    assert "function hasActiveWebSocket()" in content
+    assert "return Boolean(wsIsOpen && ws && ws.readyState === WebSocket.OPEN);" in content
+    assert "if (hasActiveWebSocket()) {" in content
+    assert "formData.append('client_id', clientId);" in content
+    assert "WebSocket ainda nao esta pronto; processamento seguira sem progresso em tempo real." in content
+
+
+def test_client_id_and_preset_contracts_use_supported_and_guarded_access(project_root):
+    content = _read_index(project_root)
+
+    assert ".substr(2)" not in content
+    assert "Math.random().toString(36).slice(2)" in content
+    assert content.count("const targetFormatSelect = form?.elements?.namedItem('target_format');") == 2
+    assert "if (preset.format && targetFormatSelect) targetFormatSelect.value = preset.format;" in content
