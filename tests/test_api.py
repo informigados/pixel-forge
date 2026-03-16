@@ -4,6 +4,7 @@ import logging
 import tempfile
 from contextlib import suppress
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from PIL import Image
@@ -21,7 +22,9 @@ def _make_transparent_png_bytes() -> bytes:
     return buf.getvalue()
 
 
-SENTINEL_LOOP_WAIT_SECONDS = 2.8
+TEST_SENTINEL_WAIT_SECONDS = 0.05
+ERROR_NO_FILE_SENT = "Nenhum arquivo enviado"
+ERROR_INVALID_MODE = "Modo inválido"
 
 
 def test_process_without_files_returns_400(client):
@@ -35,7 +38,7 @@ def test_process_without_files_returns_400(client):
         },
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Nenhum arquivo enviado"
+    assert response.json()["detail"] == ERROR_NO_FILE_SENT
 
 
 def test_system_check_returns_expected_keys(client):
@@ -59,7 +62,7 @@ def test_process_invalid_mode_returns_400(client):
         },
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Modo inválido"
+    assert response.json()["detail"] == ERROR_INVALID_MODE
 
 
 def test_image_upload_process_and_preview(client):
@@ -261,12 +264,9 @@ def test_open_location_windows_file_uses_select_flag(client, project_root, monke
 
     popen_calls = []
 
-    class DummyProcess:
-        pass
-
     def fake_popen(args, *unused_args, **unused_kwargs):
         popen_calls.append(args)
-        return DummyProcess()
+        return Mock()
 
     monkeypatch.setattr("app.main.platform.system", lambda: "Windows")
     monkeypatch.setattr("app.main.subprocess.Popen", fake_popen)
@@ -310,6 +310,8 @@ def test_update_config_internal_error_does_not_leak_exception_details(client, mo
 def test_websocket_endpoint_accepts_connection(client):
     with client.websocket_connect("/ws/test-client", headers={"host": "localhost"}) as websocket:
         websocket.send_text("ping")
+        assert websocket is not None
+        websocket.close()
 
 
 def test_websocket_receives_image_progress_for_folder_processing(client):
@@ -375,6 +377,11 @@ def test_ensure_directory_accepts_path_instance(tmp_path):
 def test_sentinel_video_processing_works_with_three_return_values(monkeypatch, tmp_path):
     import app.main as main_module
 
+    original_sleep = asyncio.sleep
+
+    async def fast_sleep(delay, *args, **kwargs):
+        return await original_sleep(min(delay, 0.01), *args, **kwargs)
+
     watch_dir = tmp_path / "watch"
     output_dir = tmp_path / "out"
     watch_dir.mkdir()
@@ -396,6 +403,7 @@ def test_sentinel_video_processing_works_with_three_return_values(monkeypatch, t
 
     monkeypatch.setattr(main_module.manager, "broadcast", fake_broadcast)
     monkeypatch.setattr(main_module.video_processor, "process_video", fake_process_video)
+    monkeypatch.setattr(main_module.asyncio, "sleep", fast_sleep)
     monkeypatch.setattr(
         main_module,
         "load_config",
@@ -417,7 +425,7 @@ def test_sentinel_video_processing_works_with_three_return_values(monkeypatch, t
 
     async def _run_once():
         task = asyncio.create_task(main_module.sentinel_loop())
-        await asyncio.sleep(SENTINEL_LOOP_WAIT_SECONDS)
+        await original_sleep(TEST_SENTINEL_WAIT_SECONDS)
         task.cancel()
         with suppress(asyncio.CancelledError):
             _ = await task
