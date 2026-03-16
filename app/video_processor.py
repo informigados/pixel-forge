@@ -127,8 +127,8 @@ class VideoProcessor:
                                 last_percent = percent
                                 if progress_callback_sync:
                                     progress_callback_sync(percent)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("Falha ao interpretar progresso do FFmpeg: %s", exc)
                             
             returncode = process.poll()
             
@@ -177,8 +177,8 @@ class VideoProcessor:
             try:
                 if metadata and 'format' in metadata and 'duration' in metadata['format']:
                     duration_sec = float(metadata['format']['duration'])
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Falha ao interpretar duração do vídeo %s: %s", file_path, exc)
 
             # Construct command (logic identical to before)
             final_ext = target_format

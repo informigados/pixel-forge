@@ -357,7 +357,7 @@ def test_sentinel_video_processing_works_with_three_return_values(monkeypatch, t
         await asyncio.sleep(2.8)
         task.cancel()
         with suppress(asyncio.CancelledError):
-            await task
+            _ = await task
 
     asyncio.run(_run_once())
 

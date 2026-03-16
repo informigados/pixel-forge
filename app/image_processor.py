@@ -1,12 +1,13 @@
-from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+import importlib
 import logging
 import time
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Tuple
 
 from PIL import Image
 
 try:
-    import pillow_avif  # type: ignore # noqa: F401
+    importlib.import_module("pillow_avif")
     AVIF_PLUGIN_AVAILABLE = True
 except Exception:
     AVIF_PLUGIN_AVAILABLE = False
@@ -195,8 +196,8 @@ def process_directory(
             try:
                 percent = int(((i) / total_files) * 100)
                 progress_callback(path.name, percent)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Falha ao reportar progresso da imagem %s: %s", path.name, exc)
 
         try:
             output_path = process_single_image(path, output_dir, target_format, quality, width, height, strip_metadata)

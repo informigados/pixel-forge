@@ -132,8 +132,8 @@ def download_ffmpeg():
             try:
                 if archive.exists():
                     archive.unlink()
-            except Exception:
-                pass
+            except OSError as exc:
+                print(f"Warning: could not remove temporary archive {archive}: {exc}")
 
 if __name__ == "__main__":
     download_ffmpeg()

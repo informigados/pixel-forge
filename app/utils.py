@@ -1,8 +1,7 @@
 import re
 import sys
-import os
 from pathlib import Path
-from typing import Iterator, List, Tuple
+from typing import Iterator, Tuple
 
 
 VALID_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", ".ico", ".avif"}

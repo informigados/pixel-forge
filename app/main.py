@@ -8,7 +8,7 @@ import os
 import platform
 import subprocess
 import sys
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 import asyncio
 
@@ -57,11 +57,12 @@ class ConnectionManager:
                 self.disconnect(client_id)
 
     async def broadcast(self, message: dict):
-        for connection in list(self.active_connections.values()):
+        for client_id, connection in list(self.active_connections.items()):
             try:
                 await connection.send_json(message)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Error broadcasting WS message to %s: %s", client_id, exc)
+                self.disconnect(client_id)
 
 manager = ConnectionManager()
 # -------------------------
@@ -367,8 +368,8 @@ async def sentinel_loop():
                     try:
                         dest_error = _build_unique_destination(sentinel_errors_dir, file_path.name)
                         shutil.move(str(file_path), str(dest_error))
-                    except Exception:
-                        pass
+                    except Exception as move_exc:
+                        logger.warning("Falha ao mover arquivo do sentinel para erros %s: %s", file_path, move_exc)
                     
                     await manager.broadcast({
                         "type": "sentinel_error",
@@ -409,10 +410,8 @@ async def lifespan(_: FastAPI):
     finally:
         if sentinel_task:
             sentinel_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await sentinel_task
-            except asyncio.CancelledError:
-                pass
 
 
 app = FastAPI(title="Pixel Forge", version="0.1.0", lifespan=lifespan)
@@ -729,8 +728,8 @@ async def process_images(
                         )
                         try:
                             original_path.unlink(missing_ok=True)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.warning("Falha ao remover upload de imagem excedido %s: %s", original_path, exc)
                         continue
 
                     output_path = await asyncio.to_thread(
@@ -758,13 +757,13 @@ async def process_images(
                     if original_path and original_path.exists():
                         try:
                             original_path.unlink(missing_ok=True)
-                        except Exception:
-                            pass
+                        except Exception as cleanup_exc:
+                            logger.warning("Falha ao limpar upload de imagem %s: %s", original_path, cleanup_exc)
                 finally:
                     try:
                         await upload.close()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Falha ao fechar upload de imagem %s: %s", original_name, exc)
                     percent = int(((index + 1) / total_files) * 100) if total_files > 0 else 100
                     await report_progress_async(original_name, percent)
 
@@ -907,8 +906,8 @@ async def process_videos(
                         })
                         try:
                             temp_path.unlink(missing_ok=True)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.warning("Falha ao remover upload de vídeo excedido %s: %s", temp_path, exc)
                         continue
                             
                     # Process
@@ -935,12 +934,12 @@ async def process_videos(
                     if temp_path.exists():
                         try:
                             temp_path.unlink(missing_ok=True)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.warning("Falha ao limpar upload temporário de vídeo %s: %s", temp_path, exc)
                     try:
                         await file.close()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Falha ao fechar upload de vídeo %s: %s", original_name, exc)
         else:
             raise HTTPException(status_code=400, detail="Modo inválido")
         return {"status": "success", "processed_count": len(results), "results": results}

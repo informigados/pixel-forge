@@ -1,5 +1,4 @@
 import re
-from pathlib import Path
 
 
 def _extract_language_block(content: str, lang_key: str, next_key: str) -> str:
