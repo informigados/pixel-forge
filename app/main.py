@@ -159,8 +159,7 @@ CONFIG_FILE = BASE_DIR / "config.json"
 ALLOWED_PATH_ROOTS: Set[Path] = set()
 ALLOWED_PATHS_LOCK = threading.Lock()
 CONFIG_CACHE_LOCK = threading.Lock()
-CONFIG_CACHE_MTIME_NS: Optional[int] = None
-CONFIG_CACHE_DATA: Optional[Dict[str, Any]] = None
+CONFIG_CACHE: Dict[str, Any] = {"mtime_ns": None, "data": None}
 
 
 def _read_int_env(name: str, default: int) -> int:
@@ -775,23 +774,20 @@ def default_config() -> Dict[str, Any]:
 
 
 def load_config() -> Dict[str, Any]:
-    global CONFIG_CACHE_DATA, CONFIG_CACHE_MTIME_NS
-
     mtime_ns = _get_config_mtime_ns()
     with CONFIG_CACHE_LOCK:
-        if CONFIG_CACHE_DATA is not None and CONFIG_CACHE_MTIME_NS == mtime_ns:
-            return dict(CONFIG_CACHE_DATA)
+        cached_data = CONFIG_CACHE["data"]
+        if cached_data is not None and CONFIG_CACHE["mtime_ns"] == mtime_ns:
+            return dict(cached_data)
 
     config = _read_config_from_disk()
     with CONFIG_CACHE_LOCK:
-        CONFIG_CACHE_DATA = dict(config)
-        CONFIG_CACHE_MTIME_NS = mtime_ns
+        CONFIG_CACHE["data"] = dict(config)
+        CONFIG_CACHE["mtime_ns"] = mtime_ns
     return dict(config)
 
 
 def save_config(data: Dict[str, Any]) -> None:
-    global CONFIG_CACHE_DATA, CONFIG_CACHE_MTIME_NS
-
     config = load_config()
     allowed_keys = default_config().keys()
     for key in allowed_keys:
@@ -799,8 +795,8 @@ def save_config(data: Dict[str, Any]) -> None:
             config[key] = data[key]
     CONFIG_FILE.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
     with CONFIG_CACHE_LOCK:
-        CONFIG_CACHE_DATA = dict(config)
-        CONFIG_CACHE_MTIME_NS = _get_config_mtime_ns()
+        CONFIG_CACHE["data"] = dict(config)
+        CONFIG_CACHE["mtime_ns"] = _get_config_mtime_ns()
 
 
 @app.get("/")

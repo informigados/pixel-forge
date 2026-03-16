@@ -335,10 +335,9 @@ def test_load_config_uses_cache_until_file_mtime_changes(monkeypatch):
     fake_file = FakeConfigFile('{"output_dir": "output/images"}', 1)
     monkeypatch.setattr(main_module, "CONFIG_FILE", fake_file)
 
-    old_cache_data = main_module.CONFIG_CACHE_DATA
-    old_cache_mtime = main_module.CONFIG_CACHE_MTIME_NS
-    main_module.CONFIG_CACHE_DATA = None
-    main_module.CONFIG_CACHE_MTIME_NS = None
+    old_cache = dict(main_module.CONFIG_CACHE)
+    main_module.CONFIG_CACHE["data"] = None
+    main_module.CONFIG_CACHE["mtime_ns"] = None
 
     try:
         first = main_module.load_config()
@@ -348,8 +347,8 @@ def test_load_config_uses_cache_until_file_mtime_changes(monkeypatch):
         fake_file._mtime_ns = 2
         third = main_module.load_config()
     finally:
-        main_module.CONFIG_CACHE_DATA = old_cache_data
-        main_module.CONFIG_CACHE_MTIME_NS = old_cache_mtime
+        main_module.CONFIG_CACHE["data"] = old_cache["data"]
+        main_module.CONFIG_CACHE["mtime_ns"] = old_cache["mtime_ns"]
 
     assert first["output_dir"] == "output/images"
     assert second["output_dir"] == "output/images"

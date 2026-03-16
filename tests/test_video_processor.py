@@ -1,6 +1,3 @@
-from pathlib import Path
-
-
 def test_process_video_sync_uses_no_window_creationflags_on_windows(monkeypatch, tmp_path):
     import app.video_processor as video_processor_module
 
