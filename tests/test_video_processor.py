@@ -6,7 +6,7 @@ def test_windows_uses_create_no_window_flag(monkeypatch, tmp_path):
     class DummyProcess:
         def __init__(self):
             class _DummyStderr:
-                def readline(self_inner):
+                def readline(self):
                     return ""
 
             self.stderr = _DummyStderr()

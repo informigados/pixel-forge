@@ -1161,7 +1161,7 @@
             text = text.replaceAll(`{${paramKey}}`, String(params[paramKey]));
         });
         return text;
-    }
+    };
 
     function updateSelectedFileCountLabel(type) {
         const fileInput = document.querySelector(`#process-form-${type} input[name="files"]`);
