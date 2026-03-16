@@ -1153,7 +1153,7 @@
 
     function t(key, fallback = '') {
         return (translations[currentLang] && translations[currentLang][key]) || fallback;
-    }
+    };
 
     function formatI18n(key, params = {}, fallback = '') {
         let text = t(key, fallback);
@@ -2047,7 +2047,7 @@
             if (hasActiveWebSocket()) {
                 formData.append('client_id', clientId);
             } else {
-                logToConsole('WebSocket ainda nao esta pronto; processamento seguira sem progresso em tempo real.');
+                logToConsole('WebSocket ainda não está pronto; processamento seguirá sem progresso em tempo real.');
             }
 
             // Validate Output Dir

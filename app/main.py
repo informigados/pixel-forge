@@ -399,8 +399,8 @@ def _read_config_from_disk() -> Dict[str, Any]:
 
 # --- Sentinel Background Task ---
 sentinel_task: Optional[asyncio.Task] = None
-# Sentinel state is currently accessed by a single coroutine task (sentinel_loop).
-# If Sentinel processing becomes parallel in the future, guard these structures with an async lock.
+# Async lock protecting access to sentinel shared state.
+SENTINEL_STATE_LOCK: asyncio.Lock = asyncio.Lock()
 SENTINEL_IN_PROGRESS: Set[Path] = set()
 SENTINEL_RECENTLY_HANDLED: Dict[Path, float] = {}
 
@@ -441,6 +441,27 @@ def _should_skip_sentinel_file(file_key: Path, now_ts: float) -> bool:
         return True
     last_handled = SENTINEL_RECENTLY_HANDLED.get(file_key)
     return bool(last_handled and (now_ts - last_handled) < SENTINEL_RECENT_TTL_SECONDS)
+
+
+async def _async_prune_sentinel_recent_cache(now_ts: float) -> None:
+    async with SENTINEL_STATE_LOCK:
+        _prune_sentinel_recent_cache(now_ts)
+
+
+async def _async_should_skip_sentinel_file(file_key: Path, now_ts: float) -> bool:
+    async with SENTINEL_STATE_LOCK:
+        return _should_skip_sentinel_file(file_key, now_ts)
+
+
+async def _mark_sentinel_file_started(file_key: Path) -> None:
+    async with SENTINEL_STATE_LOCK:
+        SENTINEL_IN_PROGRESS.add(file_key)
+
+
+async def _mark_sentinel_file_finished(file_key: Path, handled_at: float) -> None:
+    async with SENTINEL_STATE_LOCK:
+        SENTINEL_RECENTLY_HANDLED[file_key] = handled_at
+        SENTINEL_IN_PROGRESS.discard(file_key)
 
 
 async def _check_file_stability(file_path: Path, stable_seconds: int) -> bool:
@@ -549,7 +570,7 @@ async def _process_sentinel_file(
         "file_type": file_type,
     })
 
-    SENTINEL_IN_PROGRESS.add(file_key)
+    await _mark_sentinel_file_started(file_key)
     try:
         processed_path = await _process_sentinel_media(
             file_path,
@@ -576,8 +597,7 @@ async def _process_sentinel_file(
             file_type=file_type,
         )
     finally:
-        SENTINEL_RECENTLY_HANDLED[file_key] = time.time()
-        SENTINEL_IN_PROGRESS.discard(file_key)
+        await _mark_sentinel_file_finished(file_key, time.time())
 
 
 def _log_future_exception(future: Future[Any], *, context: str) -> None:
@@ -624,7 +644,7 @@ async def sentinel_loop():
                 continue
 
             now_ts = time.time()
-            _prune_sentinel_recent_cache(now_ts)
+            await _async_prune_sentinel_recent_cache(now_ts)
 
             for file_path in watch_dir.iterdir():
                 file_type = _get_sentinel_file_type(file_path)
@@ -632,7 +652,7 @@ async def sentinel_loop():
                     continue
 
                 file_key = file_path.resolve()
-                if _should_skip_sentinel_file(file_key, now_ts):
+                if await _async_should_skip_sentinel_file(file_key, now_ts):
                     continue
                 if not await _check_file_stability(file_path, SENTINEL_FILE_STABILITY_SECONDS):
                     continue
@@ -689,7 +709,11 @@ async def lifespan(_: FastAPI):
         logger.info("Sentinel loop desativado por variável de ambiente.")
         sentinel_task = None
     else:
-        sentinel_task = asyncio.create_task(sentinel_loop())
+        try:
+            sentinel_task = asyncio.create_task(sentinel_loop())
+        except Exception:
+            logger.exception("Falha ao iniciar o sentinel loop")
+            sentinel_task = None
 
     try:
         yield

@@ -58,11 +58,11 @@ def ensure_ffmpeg_available() -> bool:
         print(f"FFmpeg local detectado em: {base_dir / 'bin'}")
         return True
 
-    print("FFmpeg nao encontrado. Iniciando configuracao automatica...")
+    print("FFmpeg não encontrado. Iniciando configuração automática...")
     try:
         download_ffmpeg()
     except Exception as exc:
-        print(f"Falha durante configuracao automatica do FFmpeg: {exc}")
+        print(f"Falha durante configuração automática do FFmpeg: {exc}")
 
     has_path_ffmpeg = bool(shutil.which("ffmpeg"))
     has_path_ffprobe = bool(shutil.which("ffprobe"))

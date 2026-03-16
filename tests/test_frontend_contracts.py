@@ -119,7 +119,7 @@ def test_processing_flow_avoids_duplicate_submits_and_ws_races(project_root):
     assert "return Boolean(wsIsOpen && ws && ws.readyState === WebSocket.OPEN);" in content
     assert "if (hasActiveWebSocket()) {" in content
     assert "formData.append('client_id', clientId);" in content
-    assert "WebSocket ainda nao esta pronto; processamento seguira sem progresso em tempo real." in content
+    assert "WebSocket ainda não está pronto; processamento seguirá sem progresso em tempo real." in content
 
 
 def test_client_id_and_preset_contracts_use_supported_and_guarded_access(project_root):
@@ -129,3 +129,10 @@ def test_client_id_and_preset_contracts_use_supported_and_guarded_access(project
     assert "Math.random().toString(36).slice(2)" in content
     assert content.count("const targetFormatSelect = form?.elements?.namedItem('target_format');") == 2
     assert "if (preset.format && targetFormatSelect) targetFormatSelect.value = preset.format;" in content
+
+
+def test_websocket_fallback_log_uses_correct_portuguese_accents(project_root):
+    content = _read_index(project_root)
+
+    assert "WebSocket ainda não está pronto; processamento seguirá sem progresso em tempo real." in content
+    assert "WebSocket ainda nao esta pronto; processamento seguira sem progresso em tempo real." not in content

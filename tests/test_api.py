@@ -25,6 +25,7 @@ def _make_transparent_png_bytes() -> bytes:
 TEST_SENTINEL_WAIT_SECONDS = 0.05
 ERROR_NO_FILE_SENT = "Nenhum arquivo enviado"
 ERROR_INVALID_CLIENT_ID = "client_id inválido"
+# Minimal valid MP4 file header used as a lightweight fixture for upload tests.
 MINIMAL_MP4_BYTES = (
     b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"
 )
@@ -428,6 +429,37 @@ def test_update_config_internal_error_does_not_leak_exception_details(client, mo
     assert response.status_code == 500
     assert response.json()["detail"] == "Erro interno ao atualizar configuração"
     assert "segredo-config" not in response.text
+
+
+def test_lifespan_handles_sentinel_task_creation_failure(monkeypatch):
+    import app.main as main_module
+
+    logged_messages = []
+
+    async def fake_to_thread(func, *args, **kwargs):
+        return None
+
+    def fake_create_task(coro, *args, **kwargs):
+        coro.close()
+        raise RuntimeError("falha-criacao-task")
+
+    monkeypatch.setattr(main_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(main_module, "load_config", lambda: main_module.default_config())
+    monkeypatch.setattr(main_module, "_read_bool_env", lambda *args, **kwargs: False)
+    monkeypatch.setattr(main_module.asyncio, "create_task", fake_create_task)
+    monkeypatch.setattr(
+        main_module.logger,
+        "exception",
+        lambda message, *args, **kwargs: logged_messages.append(message),
+    )
+
+    async def run_lifespan():
+        async with main_module.lifespan(main_module.app):
+            return None
+
+    asyncio.run(run_lifespan())
+
+    assert "Falha ao iniciar o sentinel loop" in logged_messages
 
 
 def test_websocket_endpoint_accepts_connection(client):
