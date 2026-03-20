@@ -1,14 +1,14 @@
 # 🚀 Pixel Forge
 
 <div align="left">
-  <p><strong>Local-first media conversion and optimization for images and video.</strong></p>
-  <p>Built for speed, privacy, and production-grade reliability.</p>
-
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue.svg"></a>
   <a href="https://fastapi.tiangolo.com/"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115.11-009688.svg"></a>
   <a href="https://github.com/informigados/pixel-forge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/informigados/pixel-forge/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://deepwiki.com/informigados/pixel-forge"><img alt="Ask DeepWiki" src="https://deepwiki.com/badge.svg"></a>
+  
+  <p><strong>Local-first media conversion and optimization for images and video.</strong></p>
+  <p>Built for speed, privacy, and production-grade reliability.</p>
 </div>
 
 ## 🌐 Overview
