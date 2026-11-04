@@ -7,12 +7,12 @@ import threading
 import time
 import webbrowser
 
-import uvicorn
 from pathlib import Path
 
 from setup_ffmpeg import download_ffmpeg
+from app.utils import get_app_base_path
 
-MIN_PYTHON_VERSION = (3, 10)
+MIN_PYTHON_VERSION = (3, 11)
 
 def find_free_port(start_port=8000, max_port=8100):
     """
@@ -52,7 +52,7 @@ def ensure_ffmpeg_available() -> bool:
         print("FFmpeg detectado no PATH.")
         return True
 
-    base_dir = Path(__file__).resolve().parent
+    base_dir = get_app_base_path()
     local_ffmpeg, local_ffprobe = _ffmpeg_local_paths(base_dir)
     if local_ffmpeg.exists() and local_ffprobe.exists():
         print(f"FFmpeg local detectado em: {base_dir / 'bin'}")
@@ -101,11 +101,26 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Bootstrap do Pixel Forge.")
     parser.add_argument("--check-python", action="store_true", help="Verifica se a versao do Python e suportada.")
     parser.add_argument("--check-ffmpeg", action="store_true", help="Verifica se FFmpeg/FFprobe estao disponiveis.")
+    parser.add_argument("--select-folder", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--no-browser", action="store_true", help="Inicia sem abrir o navegador.")
     return parser
 
 
 def main(argv=None) -> int:
     args = _build_arg_parser().parse_args(argv)
+
+    if args.select_folder:
+        sys.stdout.reconfigure(encoding='utf-8')
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        try:
+            print(filedialog.askdirectory() or '')
+        finally:
+            root.destroy()
+        return 0
 
     if args.check_python or args.check_ffmpeg:
         if args.check_python and not ensure_supported_python_version():
@@ -129,7 +144,7 @@ def main(argv=None) -> int:
         
     host = "127.0.0.1"
     url = f"http://localhost:{port}"
-    reload_enabled = os.getenv("PIXEL_FORGE_DEV_RELOAD", "").strip().lower() in {"1", "true", "yes", "on"}
+    reload_enabled = not getattr(sys, "frozen", False) and os.getenv("PIXEL_FORGE_DEV_RELOAD", "").strip().lower() in {"1", "true", "yes", "on"}
     
     print("===================================================")
     print("  Pixel Forge - Equipe Informigados")
@@ -139,19 +154,24 @@ def main(argv=None) -> int:
     print("===================================================")
     
     # Inicia a thread para abrir o navegador
-    threading.Thread(target=open_browser, args=(url,), daemon=True).start()
+    if not args.no_browser:
+        threading.Thread(target=open_browser, args=(url,), daemon=True).start()
     
     # Inicia o servidor Uvicorn
     # 'app.main:app' é o caminho para a aplicação FastAPI
     # reload deve ficar desativado por padrão para execução estável (produção/local final).
     # Use PIXEL_FORGE_DEV_RELOAD=1 apenas em desenvolvimento.
     try:
-        uvicorn.run("app.main:app", host=host, port=port, reload=reload_enabled)
+        import uvicorn
+        if getattr(sys, "frozen", False):
+            from app.main import app
+            uvicorn.run(app, host=host, port=port, reload=False)
+        else:
+            uvicorn.run("app.main:app", host=host, port=port, reload=reload_enabled)
     except KeyboardInterrupt:
         print("\nSistema encerrado pelo usuário.")
     except Exception as e:
         print(f"\nErro ao iniciar o servidor: {e}")
-        input("Pressione Enter para sair...")
         return 1
     return 0
 

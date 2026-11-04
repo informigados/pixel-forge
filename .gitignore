@@ -8,6 +8,10 @@ __pycache__/
 
 # Virtual environments
 .venv/
+.venv-release/
+.venv-build/
+.venv-package/
+.playwright-cli/
 venv/
 env/
 

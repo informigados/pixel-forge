@@ -1,3 +1,4 @@
+import os
 import re
 import sys
 from pathlib import Path
@@ -20,6 +21,30 @@ def get_app_base_path() -> Path:
         # Running in normal Python environment
         # Assumes this file is in app/utils.py, so parent.parent is root
         return Path(__file__).resolve().parent.parent
+
+
+def get_app_data_path() -> Path:
+    """Keep user files outside the temporary executable extraction directory."""
+    override = os.getenv("PIXEL_FORGE_DATA_DIR")
+    if override:
+        return Path(override).expanduser().resolve()
+    if getattr(sys, "frozen", False):
+        return Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "PixelForge"
+    return get_app_base_path()
+
+
+def unique_output_path(directory: Path, filename: str) -> Path:
+    """Reserve a destination atomically, preserving existing files and originals."""
+    candidate = directory / filename
+    index = 1
+    while True:
+        try:
+            with candidate.open("xb"):
+                pass
+            return candidate
+        except FileExistsError:
+            candidate = directory / f"{Path(filename).stem}_{index}{Path(filename).suffix}"
+            index += 1
 
 
 def to_windows_long_path(path: Path | str) -> str:

@@ -12,6 +12,8 @@ import re
 import subprocess
 import sys
 import threading
+import tempfile
+import uuid
 from contextlib import asynccontextmanager, suppress
 
 import asyncio
@@ -35,6 +37,7 @@ from .image_processor import process_directory, process_single_image, get_file_s
 from .video_processor import video_processor
 from .utils import (
     get_app_base_path,
+    get_app_data_path,
     is_supported_video_extension,
     is_supported_image_extension,
     iter_video_files,
@@ -134,12 +137,16 @@ def _open_folder_dialog() -> tuple[str, str]:
         "root.destroy()\n"
     )
     try:
+        command = [sys.executable, "--select-folder"] if getattr(sys, "frozen", False) else [sys.executable, "-c", script]
         result = subprocess.run(
-            [sys.executable, "-c", script],
+            command,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
             timeout=120,
             check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
         if result.returncode != 0:
             stderr = result.stderr.strip() or "subprocess returned non-zero exit status"
@@ -150,8 +157,10 @@ def _open_folder_dialog() -> tuple[str, str]:
         logger.error("Error opening folder dialog: %s", exc)
         return "", FOLDER_DIALOG_OPEN_ERROR
 
-BASE_DIR = get_app_base_path()
-STATIC_DIR = BASE_DIR / "static"
+BASE_DIR = get_app_data_path()
+BASE_DIR.mkdir(parents=True, exist_ok=True)
+STATIC_DIR = get_app_base_path() / "static"
+TEMP_COMPARE_DIR = (BASE_DIR / "temp_compare") if getattr(sys, "frozen", False) else STATIC_DIR / "temp_compare"
 INDEX_FILE = STATIC_DIR / "index.html"
 CONFIG_FILE = BASE_DIR / "config.json"
 # Session-scoped allowlist roots.
@@ -159,6 +168,7 @@ CONFIG_FILE = BASE_DIR / "config.json"
 ALLOWED_PATH_ROOTS: Set[Path] = set()
 ALLOWED_PATHS_LOCK = threading.Lock()
 CONFIG_CACHE_LOCK = threading.Lock()
+CONFIG_SAVE_LOCK = threading.Lock()
 CONFIG_CACHE: Dict[str, Any] = {"mtime_ns": None, "data": None}
 
 
@@ -340,7 +350,7 @@ def _validate_allowed_existing_path(path_value: str) -> Path:
 
 def _initialize_allowed_roots() -> None:
     _register_allowed_root(BASE_DIR / "output")
-    _register_allowed_root(STATIC_DIR / "temp_compare")
+    _register_allowed_root(TEMP_COMPARE_DIR)
     _register_allowed_root(BASE_DIR / "temp_uploads")
 
 
@@ -518,6 +528,8 @@ async def _process_sentinel_media(
         )
 
     target_fmt = config.get("target_format", "mp4")
+    if target_fmt not in {fmt.value for fmt in VideoTargetFormat}:
+        target_fmt = "mp4"
     success, msg, out_path = await video_processor.process_video(
         file_path,
         processed_dir,
@@ -677,12 +689,12 @@ async def sentinel_loop():
 async def lifespan(_: FastAPI):
     global sentinel_task
     _initialize_allowed_roots()
-    (STATIC_DIR / "temp_compare").mkdir(parents=True, exist_ok=True)
+    (TEMP_COMPARE_DIR).mkdir(parents=True, exist_ok=True)
     (BASE_DIR / "temp_uploads").mkdir(parents=True, exist_ok=True)
     await asyncio.gather(
         asyncio.to_thread(
             _cleanup_temp_directory,
-            STATIC_DIR / "temp_compare",
+            TEMP_COMPARE_DIR,
             TEMP_FILES_MAX_AGE_SECONDS,
             TEMP_FILES_MAX_COUNT,
         ),
@@ -724,7 +736,7 @@ async def lifespan(_: FastAPI):
                 _ = await sentinel_task
 
 
-app = FastAPI(title="Pixel Forge", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Pixel Forge", version="1.1.0", lifespan=lifespan)
 
 # Serve static files
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -752,6 +764,9 @@ app.add_middleware(
 # Security Headers Middleware
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
+    origin = request.headers.get("origin")
+    if request.method == "POST" and origin and origin not in LOCAL_DEV_ALLOWED_ORIGINS:
+        return JSONResponse({"detail": "Origem não autorizada"}, status_code=403)
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -812,15 +827,26 @@ def load_config() -> Dict[str, Any]:
 
 
 def save_config(data: Dict[str, Any]) -> None:
-    config = load_config()
-    allowed_keys = default_config().keys()
-    for key in allowed_keys:
-        if key in data:
-            config[key] = data[key]
-    CONFIG_FILE.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-    with CONFIG_CACHE_LOCK:
-        CONFIG_CACHE["data"] = dict(config)
-        CONFIG_CACHE["mtime_ns"] = _get_config_mtime_ns()
+    with CONFIG_SAVE_LOCK:
+        config = load_config()
+        for key in default_config():
+            if key in data:
+                config[key] = data[key]
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=CONFIG_FILE.parent,
+                                             prefix='.config-', suffix='.tmp', delete=False) as stream:
+                temporary = Path(stream.name)
+                json.dump(config, stream, ensure_ascii=False, indent=2)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, CONFIG_FILE)
+        finally:
+            if temporary:
+                temporary.unlink(missing_ok=True)
+        with CONFIG_CACHE_LOCK:
+            CONFIG_CACHE["data"] = dict(config)
+            CONFIG_CACHE["mtime_ns"] = _get_config_mtime_ns()
 
 
 @app.get("/")
@@ -1011,6 +1037,7 @@ async def _process_folder_images(
         field_name="Pasta de origem",
         must_exist=True,
     )
+    _register_allowed_root(src)
     count, errors, duration, results = await asyncio.to_thread(
         process_directory,
         str(src),
@@ -1048,7 +1075,7 @@ async def _process_uploaded_images(
             detail=f"Quantidade de arquivos excede o limite de {MAX_IMAGE_UPLOAD_FILES}",
         )
 
-    temp_compare_dir = STATIC_DIR / "temp_compare"
+    temp_compare_dir = TEMP_COMPARE_DIR
     temp_compare_dir.mkdir(parents=True, exist_ok=True)
     _cleanup_temp_directory(temp_compare_dir, TEMP_FILES_MAX_AGE_SECONDS, TEMP_FILES_MAX_COUNT)
 
@@ -1069,7 +1096,7 @@ async def _process_uploaded_images(
                 errors.append(f"Arquivo {original_name}: extensão não suportada")
                 continue
 
-            timestamp = int(time.time() * 1000)
+            timestamp = uuid.uuid4().hex
             stem = Path(safe_name).stem or f"upload_{index + 1}"
             original_filename = f"upload_{stem}_{timestamp}{safe_suffix}"
             original_path = temp_compare_dir / original_filename
@@ -1106,6 +1133,7 @@ async def _process_uploaded_images(
                 width,
                 height,
                 strip_metadata,
+                output_stem=stem,
             )
             results.append({
                 "file": original_name,
@@ -1146,9 +1174,9 @@ async def process_images(
     source_dir: Optional[str] = Form(None),
     output_dir: str = Form(...),
     target_format: ImageTargetFormat = Form(...),
-    quality: int = Form(...),
-    width: Optional[int] = Form(None),
-    height: Optional[int] = Form(None),
+    quality: int = Form(..., ge=0, le=100),
+    width: Optional[int] = Form(None, ge=1, le=16384),
+    height: Optional[int] = Form(None, ge=1, le=16384),
     strip_metadata: bool = Form(True),
     client_id: Optional[str] = Form(None),
     files: List[UploadFile] = File(None),
@@ -1204,6 +1232,10 @@ async def process_images(
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    origin = websocket.headers.get("origin")
+    if origin and origin not in LOCAL_DEV_ALLOWED_ORIGINS:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     try:
         safe_client_id = _normalize_client_id_value(client_id)
     except ValueError:
@@ -1233,9 +1265,9 @@ async def process_videos(
     source_dir: Optional[str] = Form(None),
     output_dir: str = Form(...),
     target_format: VideoTargetFormat = Form(...),
-    quality: int = Form(...),
-    width: Optional[int] = Form(None),
-    height: Optional[int] = Form(None),
+    quality: int = Form(..., ge=0, le=100),
+    width: Optional[int] = Form(None, ge=1, le=16384),
+    height: Optional[int] = Form(None, ge=1, le=16384),
     remove_audio: bool = Form(False),
     strip_metadata: bool = Form(False),
     client_id: Optional[str] = Form(None),
@@ -1279,9 +1311,11 @@ async def process_videos(
                 field_name="Pasta de origem",
                 must_exist=True,
             )
+            _register_allowed_root(source_dir_path)
             
             # Iterate video files in folder
-            video_paths = list(iter_video_files(source_dir_path))
+            video_paths = [p for p in iter_video_files(source_dir_path)
+                           if source_dir_path == output_dir_path or not p.resolve().is_relative_to(output_dir_path)]
             total_videos = len(video_paths)
 
             for i, v_path in enumerate(video_paths, start=1):
@@ -1342,7 +1376,7 @@ async def process_videos(
                 # Sanitize filename
                 original_name = file.filename or f"video_{i+1}"
                 safe_name = sanitize_filename(original_name) or f"video_{i+1}"
-                temp_name = f"{Path(safe_name).stem}_{int(time.time() * 1000)}_{i}{Path(safe_name).suffix}"
+                temp_name = f"{uuid.uuid4().hex}{Path(safe_name).suffix}"
                 temp_path = temp_dir / temp_name
                 
                 try:
@@ -1386,7 +1420,8 @@ async def process_videos(
                         request_data.height,
                         request_data.remove_audio,
                         strip_metadata=strip_metadata,
-                        progress_callback=file_progress
+                        progress_callback=file_progress,
+                        output_stem=Path(safe_name).stem,
                     )
                     results.append({
                         "file": original_name,
@@ -1409,7 +1444,8 @@ async def process_videos(
                         await file.close()
                     except Exception as exc:
                         logger.debug("Falha ao fechar upload de vídeo %s: %s", original_name, exc)
-        return {"status": "success", "processed_count": len(results), "results": results}
+        return {"status": "success", "processed_count": sum(bool(r["success"]) for r in results),
+                "errors": [r["message"] for r in results if not r["success"]], "results": results}
     except HTTPException:
         raise
     except Exception:

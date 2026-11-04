@@ -3,8 +3,8 @@
 <div align="left">
   
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue.svg"></a>
-  <a href="https://fastapi.tiangolo.com/"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115.11-009688.svg"></a>
+  <a href="https://www.python.org/"><img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue.svg"></a>
+  <a href="https://fastapi.tiangolo.com/"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.162.0-009688.svg"></a>
   <a href="https://github.com/informigados/pixel-forge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/informigados/pixel-forge/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://deepwiki.com/informigados/pixel-forge"><img alt="Ask DeepWiki" src="https://deepwiki.com/badge.svg"></a>
   
@@ -62,7 +62,7 @@ Default content language in the product is **Portuguese (Brazil)**, with additio
 ## 🧱 Tech Stack
 
 - Backend: Python, FastAPI, Uvicorn
-- Media: Pillow (+ optional AVIF plugin), FFmpeg/FFprobe
+- Media: Pillow (native AVIF support), FFmpeg/FFprobe
 - Frontend: HTML, TailwindCSS compilado localmente, Font Awesome local, Vanilla JavaScript
 - Tests: Pytest + FastAPI TestClient
 - CI: GitHub Actions (Linux and Windows matrix)
@@ -97,9 +97,27 @@ pixel-forge/
 
 ## ⚡ Quick Start
 
+### Windows executable (1.1.0)
+
+Download `PixelForge-1.1.0-windows-x64.exe` from the
+[1.1.0 release](https://github.com/informigados/pixel-forge/releases/tag/v1.1.0).
+Requires Windows 10/11 x64. Python, FFmpeg, Node.js and an Internet connection
+are not needed to run the executable. The browser opens automatically; keep the
+console open while using the app. Close it or press Ctrl+C to stop the server.
+The first launch can take a few seconds while the executable extracts its runtime.
+
+Configuration, temporary files and default outputs are stored in
+`%LOCALAPPDATA%\PixelForge`, independently of the executable location.
+Set `PIXEL_FORGE_DATA_DIR` to use a different data directory.
+The existing source-based installation continues to use the project directory.
+The `.exe.sha256` release asset lets you verify the download using
+`Get-FileHash .\PixelForge-1.1.0-windows-x64.exe -Algorithm SHA256`.
+The executable is unsigned; Windows may display an unknown publisher notice.
+Third-party license texts are also available as a separate release download.
+
 ### ✅ Prerequisites
 
-- Python `3.10+`
+- Python `3.11+`
 - FFmpeg is auto-bootstrapped on first run (or install manually if preferred)
 
 ### 🪟 Windows
@@ -168,14 +186,37 @@ $env:PIXEL_FORGE_DISABLE_SENTINEL='1'; python -m pytest -q
 
 CI runs `compileall` + `pytest` on:
 
-- Ubuntu (`3.11`, `3.12`)
-- Windows (`3.11`, `3.12`)
+- Ubuntu (`3.11`, `3.12`, `3.13`)
+- Windows (`3.11`, `3.12`, `3.13`)
+
+### Build the Windows executable
+
+On Windows, with Python 3.13:
+
+```powershell
+py -3.13 -m venv .venv-build
+.venv-build\Scripts\python.exe -m pip install -r requirements.txt -r requirements-build.txt -r requirements-dev.txt
+npm ci
+npm run build:frontend
+.venv-build\Scripts\python.exe setup_ffmpeg.py
+.venv-build\Scripts\python.exe -m pytest -q
+.venv-build\Scripts\python.exe scripts/build_windows.py
+```
+
+`dist/` contains the executable, SHA-256 checksum and third-party licenses archive.
+User media and configuration are excluded from the build. If reusing manually
+installed FFmpeg binaries, also place the upstream `LICENSE` and `README.txt` in
+`bin/ffmpeg-license.txt` and `bin/ffmpeg-readme.txt`. Both are included automatically
+when `setup_ffmpeg.py` downloads a fresh Windows build.
+The **Windows executable** GitHub Actions workflow can generate the same artifact
+for future releases via **Run workflow**. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## ⚙️ Configuration (Environment Variables)
 
 The backend supports runtime hardening with environment variables:
 
 - `PIXEL_FORGE_DISABLE_SENTINEL`
+- `PIXEL_FORGE_DATA_DIR`
 - `PIXEL_FORGE_MAX_IMAGE_UPLOAD_FILES`
 - `PIXEL_FORGE_MAX_VIDEO_UPLOAD_FILES`
 - `PIXEL_FORGE_MAX_IMAGE_UPLOAD_BYTES`
@@ -205,6 +246,19 @@ The backend supports runtime hardening with environment variables:
 - Repository hygiene blocks local/internal artifacts from being committed (see `.gitignore`).
 
 ## 📝 Changelog
+
+### 2026-11-03 (1.1.0)
+
+- First self-contained Windows x64 executable with Python and FFmpeg included.
+- Preserve originals and existing outputs; retain upload filenames and avoid collisions.
+- Correct EXIF orientation before resize, preserve optional profiles and strip private metadata.
+- Fix WEBM encoder options, odd video dimensions and HEVC encoding of tiny frames.
+- Correct video failure counts, folder previews and mixed image/video Sentinel processing.
+- Fix Sentinel deactivation, modal dismissal, keyboard navigation and image comparison clipping.
+- Refine mobile layouts, contrast, focus states and reduced-motion behavior.
+- Persist executable configuration outside temporary extraction; save configuration atomically.
+- Update runtime dependencies, reject cross-site local operations and validate dimensions.
+- Add real media conversion tests and a repeatable Windows build workflow.
 
 ### 2026-03-10 (1.0.0)
 

@@ -1,6 +1,7 @@
 @echo off
 setlocal EnableExtensions
-set "APP_VERSION=v1.0.0"
+cd /d "%~dp0"
+set "APP_VERSION=v1.1.0"
 title PIXEL FORGE %APP_VERSION% - Sistema Profissional
 set "PYTHON_EXE="
 
@@ -24,7 +25,7 @@ if exist ".venv\Scripts\python.exe" (
     where python >nul 2>&1
     if %ERRORLEVEL% NEQ 0 (
         echo [ERRO] Python nao encontrado no PATH.
-        echo Instale o Python 3.10+ e tente novamente.
+        echo Instale o Python 3.11+ e tente novamente.
         pause
         exit /b 1
     )
@@ -50,7 +51,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [2/4] Instalando/atualizando dependencias principais...
-"%PYTHON_EXE%" -c "import importlib.util,sys; req=['fastapi','uvicorn','PIL','pillow_avif','multipart','websockets']; missing=[m for m in req if importlib.util.find_spec(m) is None]; sys.exit(1 if missing else 0)"
+"%PYTHON_EXE%" scripts/check_dependencies.py
 if %ERRORLEVEL% NEQ 0 (
     echo [INFO] Dependencias principais ausentes. Instalando...
     "%PYTHON_EXE%" -m pip install -r requirements.txt

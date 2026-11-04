@@ -43,3 +43,41 @@
 .tab-strip::-webkit-scrollbar {
   display: none;
 }
+
+:root { color-scheme: dark; }
+
+button, input, select { touch-action: manipulation; }
+button:focus-visible, a:focus-visible, label:focus-within {
+  outline: 2px solid #34d399;
+  outline-offset: 4px;
+}
+input, select, .flex-1 { min-width: 0; }
+input[type="file"]:focus-visible { outline: none; }
+[role="tabpanel"]:not(.hidden) { animation: fadeIn 180ms ease-out; }
+[id^="upload-source-"]:focus-within { border-color: #34d399; }
+[id^="file-list-"], #modal-message { overflow-wrap: anywhere; }
+#comparison-modal > div { overflow-y: auto; }
+#comparison-modal > div > div:first-child { flex-wrap: wrap; gap: 12px; }
+#img-processed-wrapper { clip-path: inset(0 50% 0 0); }
+.results-container > div { flex-wrap: wrap; }
+.results-container > div > div { flex-wrap: wrap; }
+.text-slate-500 { color: #94a3b8; }
+
+@media (max-width: 400px) {
+  header h1 { font-size: 2rem !important; gap: 12px !important; }
+  #image-presets, #video-presets { max-width: 225px; }
+  #comparison-modal { padding: 8px; }
+  #comparison-modal h3 { font-size: 1rem; }
+  #comparison-modal > div > div:first-child > div { gap: 4px; }
+  #comparison-modal button { min-height: 36px; }
+  #tab-config .pt-6 > div.flex { flex-direction: column; align-items: stretch; }
+  #tab-config .pt-6 > div.flex > a { justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

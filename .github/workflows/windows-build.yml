@@ -1,0 +1,44 @@
+name: Windows executable
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      PIXEL_FORGE_DISABLE_SENTINEL: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt -r requirements-build.txt
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build:frontend
+      - name: Prepare FFmpeg with checksum verification
+        run: python setup_ffmpeg.py
+      - name: Test
+        run: python -m pytest -q
+      - name: Build executable and licenses
+        run: python scripts/build_windows.py
+      - name: Check standalone runtime
+        shell: pwsh
+        run: |
+          $executable = Get-ChildItem dist/*.exe | Select-Object -First 1
+          & $executable.FullName --check-python --check-ffmpeg
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PixelForge-Windows-x64
+          path: dist/*

@@ -2,8 +2,9 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
-APP_VERSION="v1.0.0"
+APP_VERSION="v1.1.0"
 PYTHON_EXE=""
 
 fail() {
@@ -34,7 +35,7 @@ elif command -v python3 >/dev/null 2>&1; then
 elif command -v python >/dev/null 2>&1; then
   PYTHON_EXE="python"
 else
-  fail "Python nao encontrado no PATH. Instale Python 3.10+ e tente novamente."
+  fail "Python nao encontrado no PATH. Instale Python 3.11+ e tente novamente."
 fi
 
 echo "[0/4] Verificando versao do Python..."
@@ -47,7 +48,7 @@ if ! "${PYTHON_EXE}" -m pip --version >/dev/null 2>&1; then
 fi
 
 echo "[2/4] Instalando/atualizando dependencias principais..."
-if ! "${PYTHON_EXE}" -c "import importlib.util,sys; req=['fastapi','uvicorn','PIL','pillow_avif','multipart','websockets']; missing=[m for m in req if importlib.util.find_spec(m) is None]; sys.exit(1 if missing else 0)"; then
+if ! "${PYTHON_EXE}" scripts/check_dependencies.py; then
   echo "[INFO] Dependencias principais ausentes. Instalando..."
   "${PYTHON_EXE}" -m pip install -r requirements.txt || fail "Falha ao instalar dependencies de requirements.txt"
 else

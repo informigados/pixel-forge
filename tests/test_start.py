@@ -59,7 +59,7 @@ def test_find_free_port_returns_none_when_range_is_exhausted(monkeypatch):
 def test_ensure_supported_python_version_accepts_supported_tuple():
     import start
 
-    assert start.ensure_supported_python_version((3, 10, 0)) is True
+    assert start.ensure_supported_python_version((3, 11, 0)) is True
     assert start.ensure_supported_python_version((3, 12, 1)) is True
 
 
@@ -68,4 +68,4 @@ def test_ensure_supported_python_version_rejects_older_versions(capsys):
 
     assert start.ensure_supported_python_version((3, 9, 18)) is False
     captured = capsys.readouterr()
-    assert "Python 3.10+ e obrigatorio" in captured.out
+    assert "Python 3.11+ e obrigatorio" in captured.out

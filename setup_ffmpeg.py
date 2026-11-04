@@ -166,6 +166,8 @@ def download_ffmpeg():
                 _extract_from_zip(archive, {
                     ffmpeg_binary_name: ffmpeg_exe,
                     ffprobe_binary_name: ffprobe_exe,
+                    "LICENSE": bin_dir / "ffmpeg-license.txt",
+                    "README.txt": bin_dir / "ffmpeg-readme.txt",
                 })
 
             elif system == "Linux":

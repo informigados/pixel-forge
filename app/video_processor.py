@@ -1,4 +1,3 @@
-import shutil
 import asyncio
 import json
 import logging
@@ -10,7 +9,7 @@ import traceback
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .utils import ensure_directory, get_app_base_path, sanitize_filename, to_windows_long_path
+from .utils import ensure_directory, get_app_base_path, sanitize_filename, to_windows_long_path, unique_output_path
 
 logger = logging.getLogger("pixelforge")
 
@@ -29,15 +28,13 @@ class VideoProcessor:
         # Check local bin folder
         local_bin_dir = get_app_base_path() / "bin"
         
-        if not self.ffmpeg_path:
-            local_ffmpeg = local_bin_dir / "ffmpeg.exe"
-            if local_ffmpeg.exists():
-                self.ffmpeg_path = str(local_ffmpeg)
+        local_ffmpeg = local_bin_dir / ("ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg")
+        if local_ffmpeg.exists():
+            self.ffmpeg_path = str(local_ffmpeg)
                 
-        if not self.ffprobe_path:
-            local_ffprobe = local_bin_dir / "ffprobe.exe"
-            if local_ffprobe.exists():
-                self.ffprobe_path = str(local_ffprobe)
+        local_ffprobe = local_bin_dir / ("ffprobe.exe" if platform.system() == "Windows" else "ffprobe")
+        if local_ffprobe.exists():
+            self.ffprobe_path = str(local_ffprobe)
                     
         if not self.ffmpeg_path:
             logger.warning("FFmpeg não encontrado no PATH do sistema. Processamento de vídeo não funcionará.")
@@ -48,7 +45,7 @@ class VideoProcessor:
             logger.info("FFprobe encontrado em: %s", self.ffprobe_path)
 
     def check_ffmpeg(self) -> bool:
-        return self.ffmpeg_path is not None
+        return self.ffmpeg_path is not None and self.ffprobe_path is not None
 
     def _get_video_metadata_sync(self, file_path: Path) -> Dict:
         """Sync implementation of get_video_metadata using subprocess.run"""
@@ -72,6 +69,7 @@ class VideoProcessor:
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
+                timeout=30,
                 creationflags=_get_subprocess_creationflags(),
             )
             
@@ -152,6 +150,7 @@ class VideoProcessor:
             returncode = process.poll()
             
             if returncode != 0:
+                output_path.unlink(missing_ok=True)
                 error_details = "\n".join(stderr_lines)
                 logger.error("Erro FFmpeg (sync): %s", error_details)
                 return False, f"Erro na conversão: {stderr_lines[-1] if stderr_lines else 'Erro desconhecido'}", None
@@ -162,6 +161,7 @@ class VideoProcessor:
             return True, f"Vídeo processado com sucesso: {output_path.name}", str(output_path)
             
         except Exception as exc:
+             output_path.unlink(missing_ok=True)
              logger.error(
                  "Erro interno no processamento de vídeo (sync): %r\n%s",
                  exc,
@@ -179,7 +179,8 @@ class VideoProcessor:
         height: Optional[int] = None,
         remove_audio: bool = False,
         strip_metadata: bool = False,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
+        output_stem: Optional[str] = None,
     ) -> Tuple[bool, str, Optional[str]]:
         """
         Process a single video file using FFmpeg with real-time progress.
@@ -190,6 +191,9 @@ class VideoProcessor:
 
         if not file_path.exists():
              return False, f"Arquivo não encontrado: {file_path}", None
+
+        if target_format not in {"mp4", "mp4_hevc", "mkv", "mov", "webm", "wmv", "flv", "avi"}:
+            return False, "Formato de vídeo não suportado.", None
 
         try:
             ensure_directory(output_dir)
@@ -208,9 +212,9 @@ class VideoProcessor:
             if target_format == "mp4_hevc":
                 final_ext = "mp4"
                 
-            safe_stem = sanitize_filename(file_path.stem)
+            safe_stem = sanitize_filename(output_stem or file_path.stem)
             output_filename = f"{safe_stem}.{final_ext}"
-            output_path = output_dir / output_filename
+            output_path = unique_output_path(output_dir, output_filename)
             crf = int(51 - (quality * 0.33))
             crf = max(0, min(51, crf))
 
@@ -221,6 +225,10 @@ class VideoProcessor:
 
             if target_format == "mp4_hevc":
                 cmd.extend(["-c:v", "libx265", "-tag:v", "hvc1"])
+                video_stream = next((s for s in metadata.get('streams', []) if s.get('codec_type') == 'video'), {})
+                if min(width or video_stream.get('width', 0), height or video_stream.get('height', 0)) < 64:
+                    # Avoid SIMD buffer overruns in x265 builds on sub-64px frames.
+                    cmd.extend(["-x265-params", "asm=0"])
             elif target_format in ["mp4", "mkv", "mov"]:
                 cmd.extend(["-c:v", "libx264"])
             elif target_format == "webm":
@@ -234,7 +242,9 @@ class VideoProcessor:
             else:
                 cmd.extend(["-c:v", "libx264"])
 
-            if target_format not in ["wmv", "flv", "avi"]:
+            if target_format == "webm":
+                cmd.extend(["-crf", str(crf), "-b:v", "0"])
+            elif target_format not in ["wmv", "flv", "avi"]:
                 cmd.extend(["-crf", str(crf), "-preset", "medium"])
             else:
                 cmd.extend(["-q:v", str(max(2, int((100-quality)/5)))])
@@ -258,6 +268,13 @@ class VideoProcessor:
                 w = width if width else -2
                 h = height if height else -2
                 cmd.extend(["-vf", f"scale={w}:{h}"])
+
+            if target_format in {"mp4", "mp4_hevc", "mkv", "mov", "webm"}:
+                # Browser-compatible chroma and even dimensions for 4:2:0 encoders.
+                scale = f"scale={width or -2}:{height or -2}," if width or height else ""
+                if width or height:
+                    del cmd[-2:]
+                cmd.extend(["-vf", scale + "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-pix_fmt", "yuv420p"])
 
             cmd.append(output_path_str)
             

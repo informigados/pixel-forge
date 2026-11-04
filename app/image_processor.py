@@ -1,16 +1,12 @@
-import importlib
 import logging
 import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from PIL import Image
+from PIL import Image, ImageOps
 
-try:
-    importlib.import_module("pillow_avif")
-    AVIF_PLUGIN_AVAILABLE = True
-except Exception:
-    AVIF_PLUGIN_AVAILABLE = False
+Image.init()
+AVIF_PLUGIN_AVAILABLE = "AVIF" in Image.SAVE
 
 from .utils import (
     clamp_quality,
@@ -18,6 +14,8 @@ from .utils import (
     ensure_directory,
     is_supported_image_extension,
     iter_image_files,
+    unique_output_path,
+    sanitize_filename,
 )
 
 
@@ -120,6 +118,7 @@ def process_single_image(
     width: Optional[int],
     height: Optional[int],
     strip_metadata: bool = True,
+    output_stem: Optional[str] = None,
 ) -> Path:
     if not source_path.exists() or not source_path.is_file():
         raise ImageProcessingError("Arquivo de origem inexistente", str(source_path))
@@ -131,11 +130,16 @@ def process_single_image(
     _ensure_target_format_supported(target_format_upper)
     quality_value = clamp_quality(quality)
 
-    with Image.open(source_path) as img:
+    with Image.open(source_path) as source:
+        img = ImageOps.exif_transpose(source)
         # Preserve EXIF if requested and available
         exif_data = None
         if not strip_metadata:
             exif_data = img.info.get("exif")
+        icc_profile = img.info.get("icc_profile") if not strip_metadata else None
+        # Pillow can implicitly copy metadata from info, even without save kwargs.
+        if strip_metadata:
+            img.info.clear()
 
         img = _prepare_image_for_target(img, target_format_upper)
         new_width, new_height = compute_new_size(img.width, img.height, width, height)
@@ -143,8 +147,8 @@ def process_single_image(
             resize_filter = _select_resize_filter((img.width, img.height), (new_width, new_height))
             img = img.resize((new_width, new_height), resample=resize_filter)
 
-        output_filename = source_path.stem + "." + target_format.lower()
-        output_path = output_directory / output_filename
+        output_filename = (sanitize_filename(output_stem) if output_stem else source_path.stem) + "." + target_format.lower()
+        output_path = unique_output_path(output_directory, output_filename)
 
         save_kwargs = {"format": target_format_upper}
         
@@ -160,7 +164,13 @@ def process_single_image(
         if exif_data and target_format_upper in ["JPEG", "WEBP", "AVIF"]:
             save_kwargs["exif"] = exif_data
 
-        img.save(output_path, **save_kwargs)
+        if icc_profile and target_format_upper in {"JPEG", "PNG", "WEBP", "AVIF", "TIFF"}:
+            save_kwargs["icc_profile"] = icc_profile
+        try:
+            img.save(output_path, **save_kwargs)
+        except Exception:
+            output_path.unlink(missing_ok=True)
+            raise
         return output_path
 
 
@@ -189,7 +199,10 @@ def process_directory(
     progress_callback: Optional[Callable[[str, int], None]] = None,
 ) -> Tuple[int, List[str], int, List[Dict[str, str]]]:
     start = time.perf_counter()
-    image_paths = list(iter_image_files(source_dir))
+    output_root = Path(output_dir).resolve()
+    source_root = Path(source_dir).resolve()
+    image_paths = [p for p in iter_image_files(source_dir)
+                   if output_root == source_root or not p.resolve().is_relative_to(output_root)]
     total_files = len(image_paths)
     
     errors: List[str] = []

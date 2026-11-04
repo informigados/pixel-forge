@@ -7,6 +7,10 @@ const root = resolve(here, "..");
 
 const copies = [
   {
+    from: resolve(root, "node_modules", "@fortawesome", "fontawesome-free", "LICENSE.txt"),
+    to: resolve(root, "static", "vendor", "fontawesome", "LICENSE.txt"),
+  },
+  {
     from: resolve(root, "node_modules", "@fortawesome", "fontawesome-free", "css", "all.min.css"),
     to: resolve(root, "static", "vendor", "fontawesome", "css", "all.min.css"),
   },
