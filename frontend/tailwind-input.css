@@ -45,6 +45,7 @@
 }
 
 :root { color-scheme: dark; }
+.brand-logo { display: block; width: 400px; max-width: 100%; height: auto; object-fit: contain; }
 
 button, input, select { touch-action: manipulation; }
 button:focus-visible, a:focus-visible, label:focus-within {

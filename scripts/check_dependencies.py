@@ -5,7 +5,11 @@ import sys
 
 
 def main():
-    for line in (Path(__file__).resolve().parents[1] / 'requirements.txt').read_text().splitlines():
+    root = Path(__file__).resolve().parents[1]
+    requirements = (root / 'requirements.txt').read_text().splitlines()
+    if sys.platform == 'win32':
+        requirements += (root / 'requirements-desktop.txt').read_text().splitlines()
+    for line in requirements:
         if not line.strip() or line.startswith('#'):
             continue
         name, expected = line.split('==', 1)

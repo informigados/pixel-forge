@@ -137,17 +137,17 @@ def _open_folder_dialog() -> tuple[str, str]:
         "root.destroy()\n"
     )
     try:
-        command = [sys.executable, "--select-folder"] if getattr(sys, "frozen", False) else [sys.executable, "-c", script]
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
-            timeout=120,
-            check=False,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
-        )
+        with tempfile.TemporaryDirectory(prefix='pixelforge-picker-') as temporary:
+            result_file = Path(temporary) / 'selection.json'
+            command = ([sys.executable, "--select-folder", "--folder-result-file", str(result_file)]
+                       if getattr(sys, "frozen", False) else [sys.executable, "-c", script])
+            result = subprocess.run(
+                command, capture_output=True, text=True, encoding="utf-8",
+                env={**os.environ, "PYTHONIOENCODING": "utf-8"}, timeout=120, check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+            )
+            if result.returncode == 0 and result_file.exists():
+                return json.loads(result_file.read_text(encoding='utf-8')).get('path', ''), ''
         if result.returncode != 0:
             stderr = result.stderr.strip() or "subprocess returned non-zero exit status"
             logger.error("Error opening folder dialog subprocess: %s", stderr)
@@ -736,7 +736,7 @@ async def lifespan(_: FastAPI):
                 _ = await sentinel_task
 
 
-app = FastAPI(title="Pixel Forge", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="Pixel Forge", version="1.1.1", lifespan=lifespan)
 
 # Serve static files
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -887,7 +887,15 @@ def update_config(config: ConfigUpdateRequest) -> Dict[str, str]:
 @app.post("/select-folder")
 def select_folder_dialog() -> Dict[str, str]:
     """Opens a native folder selection dialog on the server machine."""
-    folder, error = _open_folder_dialog()
+    picker = getattr(app.state, 'folder_picker', None)
+    if picker:
+        try:
+            folder, error = picker(), ''
+        except Exception:
+            logger.exception('Falha no seletor de pastas da janela nativa')
+            folder, error = '', FOLDER_DIALOG_OPEN_ERROR
+    else:
+        folder, error = _open_folder_dialog()
     if folder:
         try:
             validated = _validate_directory_input(folder, field_name="Pasta selecionada", must_exist=True)

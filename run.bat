@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-set "APP_VERSION=v1.1.0"
+set "APP_VERSION=v1.1.1"
 title PIXEL FORGE %APP_VERSION% - Sistema Profissional
 set "PYTHON_EXE="
 
@@ -54,7 +54,7 @@ echo [2/4] Instalando/atualizando dependencias principais...
 "%PYTHON_EXE%" scripts/check_dependencies.py
 if %ERRORLEVEL% NEQ 0 (
     echo [INFO] Dependencias principais ausentes. Instalando...
-    "%PYTHON_EXE%" -m pip install -r requirements.txt
+    "%PYTHON_EXE%" -m pip install -r requirements.txt -r requirements-desktop.txt
     if %ERRORLEVEL% NEQ 0 (
         echo [ERRO] Falha ao instalar dependencies de requirements.txt
         pause

@@ -5,6 +5,7 @@ import platform
 import re
 import shutil
 import subprocess
+import threading
 import traceback
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -21,6 +22,9 @@ def _get_subprocess_creationflags() -> int:
 
 class VideoProcessor:
     def __init__(self):
+        self._process_lock = threading.Lock()
+        self._active_processes = set()
+        self._stopping = threading.Event()
         # Check system PATH
         self.ffmpeg_path = shutil.which("ffmpeg")
         self.ffprobe_path = shutil.which("ffprobe")
@@ -46,6 +50,16 @@ class VideoProcessor:
 
     def check_ffmpeg(self) -> bool:
         return self.ffmpeg_path is not None and self.ffprobe_path is not None
+
+    def stop_active_processes(self):
+        self._stopping.set()
+        with self._process_lock:
+            for process in list(self._active_processes):
+                try:
+                    if process.poll() is None:
+                        process.terminate()
+                except OSError:
+                    logger.exception('Falha ao encerrar conversão ao fechar a janela')
 
     def _get_video_metadata_sync(self, file_path: Path) -> Dict:
         """Sync implementation of get_video_metadata using subprocess.run"""
@@ -101,7 +115,11 @@ class VideoProcessor:
         progress_callback_sync: Optional[Callable]
     ) -> Tuple[bool, str, Optional[str]]:
         """Sync implementation of process_video using subprocess.Popen"""
+        process = None
         try:
+            if self._stopping.is_set():
+                output_path.unlink(missing_ok=True)
+                return False, 'Aplicativo encerrando.', None
             logger.info("Iniciando conversão (sync): %s", " ".join(cmd))
             
             # Using Popen for real-time output reading
@@ -115,6 +133,10 @@ class VideoProcessor:
                 errors='ignore',
                 creationflags=_get_subprocess_creationflags(),
             )
+            with self._process_lock:
+                self._active_processes.add(process)
+                if self._stopping.is_set():
+                    process.terminate()
             
             time_pattern = re.compile(r"time=(\d{2}):(\d{2}):(\d{2}\.\d{2})")
             last_percent = -1
@@ -168,6 +190,10 @@ class VideoProcessor:
                  traceback.format_exc(),
              )
              return False, f"Erro interno: {str(exc)}", None
+        finally:
+            if process is not None:
+                with self._process_lock:
+                    self._active_processes.discard(process)
 
     async def process_video(
         self,

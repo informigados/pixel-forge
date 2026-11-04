@@ -21,7 +21,7 @@ jobs:
           node-version: "22"
           cache: npm
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt -r requirements-dev.txt -r requirements-build.txt
+        run: python -m pip install -r requirements.txt -r requirements-desktop.txt -r requirements-dev.txt -r requirements-build.txt
       - name: Build frontend
         run: |
           npm ci
@@ -32,12 +32,14 @@ jobs:
         run: python -m pytest -q
       - name: Build executable and licenses
         run: python scripts/build_windows.py
+      - name: Build offline installer and shortcuts
+        run: python scripts/build_installer.py
       - name: Check standalone runtime
         shell: pwsh
         run: |
-          $executable = Get-ChildItem dist/*.exe | Select-Object -First 1
-          & $executable.FullName --check-python --check-ffmpeg
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $executable = Get-ChildItem dist/*-windows-x64.exe | Where-Object Name -NotMatch 'setup' | Select-Object -First 1
+          $process = Start-Process -FilePath $executable.FullName -ArgumentList '--check-python','--check-ffmpeg' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { exit $process.ExitCode }
       - uses: actions/upload-artifact@v4
         with:
           name: PixelForge-Windows-x64

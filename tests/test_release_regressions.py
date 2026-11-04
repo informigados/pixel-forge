@@ -130,4 +130,4 @@ def test_frozen_folder_picker_uses_helper_mode(monkeypatch):
     folder, error = main._open_folder_dialog()
     assert folder == 'C:/Fotos/ação'
     assert error == ''
-    assert calls[0] == [main.sys.executable, '--select-folder']
+    assert calls[0][:3] == [main.sys.executable, '--select-folder', '--folder-result-file']

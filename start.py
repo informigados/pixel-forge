@@ -102,22 +102,34 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--check-python", action="store_true", help="Verifica se a versao do Python e suportada.")
     parser.add_argument("--check-ffmpeg", action="store_true", help="Verifica se FFmpeg/FFprobe estao disponiveis.")
     parser.add_argument("--select-folder", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--no-browser", action="store_true", help="Inicia sem abrir o navegador.")
+    parser.add_argument("--folder-result-file", help=argparse.SUPPRESS)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--no-browser", action="store_true", help="Inicia somente o serviço local, sem janela.")
+    mode.add_argument("--browser", action="store_true", help="Abre no navegador em vez da janela do aplicativo.")
+    mode.add_argument("--desktop", action="store_true", help="Abre em uma janela nativa.")
     return parser
 
 
 def main(argv=None) -> int:
+    from app.desktop import prepare_desktop_logging
+    prepare_desktop_logging()
     args = _build_arg_parser().parse_args(argv)
 
     if args.select_folder:
-        sys.stdout.reconfigure(encoding='utf-8')
+        if sys.stdout is not None:
+            sys.stdout.reconfigure(encoding='utf-8')
         import tkinter as tk
         from tkinter import filedialog
         root = tk.Tk()
         root.withdraw()
         root.attributes('-topmost', True)
         try:
-            print(filedialog.askdirectory() or '')
+            folder = filedialog.askdirectory() or ''
+            if args.folder_result_file:
+                import json
+                Path(args.folder_result_file).write_text(json.dumps({'path': folder}), encoding='utf-8')
+            else:
+                print(folder)
         finally:
             root.destroy()
         return 0
@@ -145,6 +157,15 @@ def main(argv=None) -> int:
     host = "127.0.0.1"
     url = f"http://localhost:{port}"
     reload_enabled = not getattr(sys, "frozen", False) and os.getenv("PIXEL_FORGE_DEV_RELOAD", "").strip().lower() in {"1", "true", "yes", "on"}
+
+    if not args.no_browser and not args.browser and (sys.platform == 'win32' or args.desktop):
+        from app.desktop import run_desktop, show_startup_error
+        try:
+            run_desktop(port)
+            return 0
+        except Exception as error:
+            show_startup_error(error)
+            return 1
     
     print("===================================================")
     print("  Pixel Forge - Equipe Informigados")

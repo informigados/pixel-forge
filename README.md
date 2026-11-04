@@ -97,13 +97,21 @@ pixel-forge/
 
 ## ⚡ Quick Start
 
-### Windows executable (1.1.0)
+### Windows installer (1.1.1)
 
-Download `PixelForge-1.1.0-windows-x64.exe` from the
-[1.1.0 release](https://github.com/informigados/pixel-forge/releases/tag/v1.1.0).
-Requires Windows 10/11 x64. Python, FFmpeg, Node.js and an Internet connection
-are not needed to run the executable. The browser opens automatically; keep the
-console open while using the app. Close it or press Ctrl+C to stop the server.
+Download `PixelForge-1.1.1-setup-windows-x64.exe` from the
+[1.1.1 release](https://github.com/informigados/pixel-forge/releases/tag/v1.1.1).
+Requires Windows 10 (1809+) or Windows 11 x64. The installer creates Start menu
+and optional desktop shortcuts with the supplied Pixel Forge icon. Installation
+does not require administrator privileges. The Microsoft-signed offline WebView2
+installer is included and runs only if that runtime is absent.
+
+The application opens in its own resizable window with minimize, maximize,
+restore and close controls. Closing the window shuts down its local server and
+active video conversions. No terminal or separate browser window is needed.
+Python, FFmpeg and Node.js do not need to be installed separately.
+The portable `PixelForge-1.1.1-windows-x64.exe` is also available, and requires
+WebView2 to be installed already. Use the full installer if it is missing.
 The first launch can take a few seconds while the executable extracts its runtime.
 
 Configuration, temporary files and default outputs are stored in
@@ -111,7 +119,7 @@ Configuration, temporary files and default outputs are stored in
 Set `PIXEL_FORGE_DATA_DIR` to use a different data directory.
 The existing source-based installation continues to use the project directory.
 The `.exe.sha256` release asset lets you verify the download using
-`Get-FileHash .\PixelForge-1.1.0-windows-x64.exe -Algorithm SHA256`.
+`Get-FileHash .\PixelForge-1.1.1-setup-windows-x64.exe -Algorithm SHA256`.
 The executable is unsigned; Windows may display an unknown publisher notice.
 Third-party license texts are also available as a separate release download.
 
@@ -149,6 +157,11 @@ npm install
 npm run build:frontend
 python start.py
 ```
+
+On Windows, also install `pip install -r requirements-desktop.txt` when setting
+up manually. `run.bat` includes this step. Windows opens in desktop mode by
+default; `python start.py --browser` opens in the browser and
+`python start.py --no-browser` starts only the local server.
 
 `start.py` checks FFmpeg/FFprobe and auto-runs `setup_ffmpeg.py` when needed.
 
@@ -195,15 +208,21 @@ On Windows, with Python 3.13:
 
 ```powershell
 py -3.13 -m venv .venv-build
-.venv-build\Scripts\python.exe -m pip install -r requirements.txt -r requirements-build.txt -r requirements-dev.txt
+.venv-build\Scripts\python.exe -m pip install -r requirements.txt -r requirements-desktop.txt -r requirements-build.txt -r requirements-dev.txt
 npm ci
 npm run build:frontend
 .venv-build\Scripts\python.exe setup_ffmpeg.py
 .venv-build\Scripts\python.exe -m pytest -q
 .venv-build\Scripts\python.exe scripts/build_windows.py
+.venv-build\Scripts\python.exe scripts/build_installer.py
 ```
 
-`dist/` contains the executable, SHA-256 checksum and third-party licenses archive.
+Install [Inno Setup 6](https://jrsoftware.org/isinfo.php) before building the installer.
+`build_installer.py` obtains the offline WebView2 installer from Microsoft and
+verifies its Authenticode signature before packaging it. `dist/` contains the
+installer, portable executable, SHA-256 checksums and third-party licenses archive.
+The supplied `static/images/icon.png` is converted to a multi-resolution `.ico`
+without stretching; `logo.png` is displayed at its original aspect ratio.
 User media and configuration are excluded from the build. If reusing manually
 installed FFmpeg binaries, also place the upstream `LICENSE` and `README.txt` in
 `bin/ffmpeg-license.txt` and `bin/ffmpeg-readme.txt`. Both are included automatically
@@ -246,6 +265,16 @@ The backend supports runtime hardening with environment variables:
 - Repository hygiene blocks local/internal artifacts from being committed (see `.gitignore`).
 
 ## 📝 Changelog
+
+### 2026-11-03 (1.1.1)
+
+- Apply the supplied logo to the interface and supplied icon to the window,
+  executable, installer, Start menu, desktop shortcut and browser favicon.
+- Open Windows installations in a native WebView2 window with standard controls.
+- Close the local server and stop active video conversions when the window closes.
+- Use a native folder picker owned by the application window.
+- Add a per-user offline installer, WebView2 detection and signature verification.
+- Preserve existing configuration and output files across application updates.
 
 ### 2026-11-03 (1.1.0)
 

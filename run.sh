@@ -4,7 +4,7 @@ set -o nounset
 set -o pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-APP_VERSION="v1.1.0"
+APP_VERSION="v1.1.1"
 PYTHON_EXE=""
 
 fail() {

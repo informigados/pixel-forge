@@ -11,6 +11,8 @@ import shutil
 import subprocess
 import sys
 
+from build_brand_assets import build_icons
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -18,6 +20,7 @@ def main():
     if sys.platform != "win32":
         raise SystemExit("Build the Windows executable on Windows.")
     version = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
+    icon_path = build_icons()
     staging = ROOT / "build" / "release-assets"
     staging.mkdir(parents=True, exist_ok=True)
     static = staging / "static"
@@ -61,25 +64,38 @@ def main():
             requirement = Requirement(raw)
             if requirement.marker is None or requirement.marker.evaluate({'extra': ''}):
                 collect_license(requirement.name)
-    for requirement in (ROOT / "requirements.txt").read_text().splitlines():
+    requirements = (ROOT / "requirements.txt").read_text().splitlines()
+    requirements += (ROOT / "requirements-desktop.txt").read_text().splitlines()
+    for requirement in requirements:
         if requirement and not requirement.startswith('#'):
             collect_license(requirement.split('==')[0])
-    # Reuse the project's cube silhouette for the Windows application icon.
-    from PIL import Image, ImageDraw
-    icon = Image.new('RGBA', (256, 256), (2, 6, 23, 255))
-    draw = ImageDraw.Draw(icon)
-    draw.polygon([(128, 24), (224, 60), (224, 196), (128, 232), (32, 196), (32, 60)], fill='#10b981')
-    draw.polygon([(128, 46), (198, 72), (128, 98), (58, 72)], fill='#020617')
-    draw.polygon([(144, 122), (204, 100), (204, 182), (144, 204)], fill='#020617')
-    icon_path = staging / 'pixel-forge.ico'
-    icon.save(icon_path, sizes=[(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)])
+    version_file = staging / 'windows-version.txt'
+    version_tuple = tuple(int(part) for part in version.split('.')) + (0,)
+    version_file.write_text(f'''VSVersionInfo(
+      ffi=FixedFileInfo(filevers={version_tuple}, prodvers={version_tuple}, mask=0x3f,
+                       flags=0, OS=0x40004, fileType=1, subtype=0, date=(0,0)),
+      kids=[StringFileInfo([StringTable('040904B0', [
+        StringStruct('CompanyName', 'INformigados'),
+        StringStruct('FileDescription', 'Pixel Forge'),
+        StringStruct('FileVersion', '{version}'),
+        StringStruct('ProductName', 'Pixel Forge'),
+        StringStruct('ProductVersion', '{version}'),
+        StringStruct('OriginalFilename', 'PixelForge.exe')])]),
+        VarFileInfo([VarStruct('Translation', [1033, 1200])])])''', encoding='utf-8')
     name = f"PixelForge-{version}-windows-x64"
     command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile',
-               '--console', '--noupx', '--name', name, '--icon', str(icon_path),
+               '--windowed', '--noupx', '--name', name, '--icon', str(icon_path),
+               '--version-file', str(version_file),
                '--paths', str(ROOT), '--add-data', f'{static};static',
                '--add-data', f'{notices};licenses',
                '--hidden-import', 'app.main', '--collect-all', 'uvicorn',
                '--collect-all', 'websockets', '--collect-all', 'PIL',
+               '--collect-all', 'webview', '--collect-all', 'clr_loader', '--collect-all', 'pythonnet',
+               '--hidden-import', 'webview.platforms.winforms',
+               '--hidden-import', 'webview.platforms.edgechromium',
+               '--exclude-module', 'PyQt5', '--exclude-module', 'PyQt6',
+               '--exclude-module', 'PySide2', '--exclude-module', 'PySide6',
+               '--exclude-module', 'cefpython3',
                '--copy-metadata', 'fastapi', '--copy-metadata', 'starlette',
                '--copy-metadata', 'opentelemetry-api']
     for binary in ['ffmpeg.exe', 'ffprobe.exe']:
