@@ -121,6 +121,7 @@ def test_frozen_folder_picker_uses_helper_mode(monkeypatch):
     import app.main as main
     from types import SimpleNamespace
     calls = []
+    monkeypatch.setattr(main.platform, 'system', lambda: 'Windows')
     def run(command, **kwargs):
         calls.append(command)
         return SimpleNamespace(returncode=0, stdout='C:/Fotos/ação\n', stderr='')
