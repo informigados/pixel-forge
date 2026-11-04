@@ -7,6 +7,22 @@ on:
   pull_request:
 
 jobs:
+  frontend:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install frontend from lockfile
+        run: npm ci
+      - name: Rebuild local frontend assets
+        run: npm run build:frontend
+      - name: Verify committed frontend assets
+        run: git diff --exit-code -- static/styles/app.css static/vendor/fontawesome
   tests:
     permissions:
       contents: read
